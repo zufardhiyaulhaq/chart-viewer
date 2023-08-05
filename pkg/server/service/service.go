@@ -48,9 +48,8 @@ func (s service) GetRepos() ([]model.Repo, error) {
 	if err != nil {
 		return nil, err
 	}
-	repos := []model.Repo{}
+	var repos []model.Repo
 	err = json.Unmarshal([]byte(stringifiedRepos), &repos)
-
 	return repos, err
 }
 

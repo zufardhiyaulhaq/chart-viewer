@@ -33,7 +33,7 @@ func NewHandler(service Service) handler {
 	}
 }
 
-func (h *handler) GetReposHandler(w http.ResponseWriter, r *http.Request) {
+func (h *handler) GetRepos(w http.ResponseWriter, r *http.Request) {
 	chartRepo, err := h.service.GetRepos()
 	if err != nil {
 		errMessage := fmt.Sprintf("cannot get repos: %s", err.Error())
@@ -43,12 +43,12 @@ func (h *handler) GetReposHandler(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, chartRepo)
 }
 
-func (h *handler) GetChartsHandler(w http.ResponseWriter, r *http.Request) {
+func (h *handler) GetCharts(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	repoName := vars["repo-name"]
 	charts, err := h.service.GetCharts(repoName)
 	if err != nil {
-		errMessage := fmt.Sprintf("Cannot get charts from repos %s: %s", repoName, err.Error())
+		errMessage := fmt.Sprintf("cannot get charts from repos %s: %s", repoName, err.Error())
 		respondWithError(w, http.StatusInternalServerError, errMessage)
 		return
 	}

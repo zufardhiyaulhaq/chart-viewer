@@ -2,6 +2,7 @@ package handler_test
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,30 +18,124 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestHandler_GetRepos(t *testing.T) {
-	repos := []model.Repo{
-		{Name: "stable", URL: "https://repo.stable"},
+func Test_handler_GetRepos(t *testing.T) {
+	type fields struct {
+		service *mocks.Service
 	}
-	serviceMock := new(mocks.Service)
-	serviceMock.On("GetRepos").Return(repos, nil)
-	appHandler := handler.NewHandler(serviceMock)
+	tests := []struct {
+		name           string
+		fields         fields
+		expectedResult string
+		expectedCode   int
+		mockFn         func(ff fields)
+	}{
+		{
+			name:           "should return 200 when success fetching repos",
+			fields:         fields{service: new(mocks.Service)},
+			expectedResult: `[{"name": "stable","url": "https://repo.stable"}]`,
+			expectedCode:   http.StatusOK,
+			mockFn: func(ff fields) {
+				repos := []model.Repo{
+					{Name: "stable", URL: "https://repo.stable"},
+				}
 
-	req, err := http.NewRequest("GET", "/repos", nil)
-	assert.NoError(t, err)
-
-	recorder := httptest.NewRecorder()
-	h := http.HandlerFunc(appHandler.GetReposHandler)
-	h.ServeHTTP(recorder, req)
-
-	content, err := io.ReadAll(recorder.Body)
-	if err != nil {
-		t.Error(err)
+				ff.service.On("GetRepos").Return(repos, nil)
+			},
+		},
+		{
+			name:           "should return 500 when service layer return error",
+			fields:         fields{service: new(mocks.Service)},
+			expectedResult: `{"error": "cannot get repos: error"}`,
+			expectedCode:   http.StatusInternalServerError,
+			mockFn: func(ff fields) {
+				ff.service.On("GetRepos").Return(nil, errors.New("error"))
+			},
+		},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.mockFn(tt.fields)
 
-	ja := jsonassert.New(t)
-	ja.Assertf(string(content), `[
-		{"name": "stable","url": "https://repo.stable"}
-	]`)
+			req, err := http.NewRequest("GET", "/repos", nil)
+			assert.NoError(t, err)
+
+			appHandler := handler.NewHandler(tt.fields.service)
+			h := http.HandlerFunc(appHandler.GetRepos)
+			recorder := httptest.NewRecorder()
+			h.ServeHTTP(recorder, req)
+
+			content, err := io.ReadAll(recorder.Body)
+			if err != nil {
+				t.Error(err)
+			}
+
+			ja := jsonassert.New(t)
+			ja.Assertf(string(content), tt.expectedResult)
+			assert.Equal(t, recorder.Code, tt.expectedCode)
+		})
+	}
+}
+
+func Test_handler_GetCharts(t *testing.T) {
+	type fields struct {
+		service *mocks.Service
+	}
+	tests := []struct {
+		name           string
+		fields         fields
+		expectedResult string
+		expectedCode   int
+		mockFn         func(ff fields)
+	}{
+		{
+			name:   "should return 200 when success fetching repos",
+			fields: fields{service: new(mocks.Service)},
+			expectedResult: `[
+								{"name": "app-deployment","versions": ["v0.0.1", "v0.0.2"]},
+								{"name": "job-deployment","versions": ["v0.2.0", "v0.2.1"]}
+							]`,
+			expectedCode: http.StatusOK,
+			mockFn: func(ff fields) {
+				charts := []model.Chart{
+					{Name: "app-deployment", Versions: []string{"v0.0.1", "v0.0.2"}},
+					{Name: "job-deployment", Versions: []string{"v0.2.0", "v0.2.1"}},
+				}
+				ff.service.On("GetCharts", "stable").Return(charts, nil)
+			},
+		},
+		{
+			name:           "should return 500 when service layer return error",
+			fields:         fields{service: new(mocks.Service)},
+			expectedResult: `{"error":"cannot get charts from repos stable: error"}`,
+			expectedCode:   http.StatusInternalServerError,
+			mockFn: func(ff fields) {
+				ff.service.On("GetCharts", "stable").Return(nil, errors.New("error"))
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.mockFn(tt.fields)
+
+			req, err := http.NewRequest("GET", "/charts/stable", nil)
+			assert.NoError(t, err)
+
+			appHandler := handler.NewHandler(tt.fields.service)
+			recorder := httptest.NewRecorder()
+			router := mux.NewRouter()
+			router.HandleFunc("/charts/{repo-name}", appHandler.GetCharts)
+			router.ServeHTTP(recorder, req)
+
+			content, err := io.ReadAll(recorder.Body)
+			if err != nil {
+				t.Error(err)
+			}
+
+			ja := jsonassert.New(t)
+			ja.Assertf(string(content), tt.expectedResult)
+			assert.Equal(t, recorder.Code, tt.expectedCode)
+		})
+	}
 }
 
 func TestHandler_GetChartsHandler(t *testing.T) {
@@ -57,7 +152,7 @@ func TestHandler_GetChartsHandler(t *testing.T) {
 
 	recorder := httptest.NewRecorder()
 	router := mux.NewRouter()
-	router.HandleFunc("/charts/{repo-name}", appHandler.GetChartsHandler)
+	router.HandleFunc("/charts/{repo-name}", appHandler.GetCharts)
 	router.ServeHTTP(recorder, req)
 
 	content, err := io.ReadAll(recorder.Body)
@@ -84,7 +179,6 @@ func TestHandler_GetChartHandler(t *testing.T) {
 	}
 	serviceMock := new(mocks.Service)
 	serviceMock.On("GetChart", "repo-name", "chart-name", "chart-version").Return(chart, nil)
-	serviceMock.On("")
 	serviceMock.On("AnalyzeTemplate", chart.Templates, "").Return([]model.AnalyticsResult{
 		{
 			Template: model.Template{
