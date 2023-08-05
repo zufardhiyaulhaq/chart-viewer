@@ -10,7 +10,6 @@ import (
 	"log"
 	"net/http"
 
-	"chart-viewer/pkg/analyzer"
 	"chart-viewer/pkg/model"
 	"gopkg.in/yaml.v3"
 )
@@ -26,13 +25,17 @@ type Helm interface {
 	RenderManifest(chartUrl, chartName, chartVersion string, files []string) (error, []model.Manifest)
 }
 
+type Analytic interface {
+	Analyze(templates []model.Template, kubeAPIVersions model.KubernetesAPIVersion) ([]model.AnalyticsResult, error)
+}
+
 type service struct {
 	helmClient Helm
 	repository Repository
-	analyzer   analyzer.Analytic
+	analyzer   Analytic
 }
 
-func NewService(helmClient Helm, repository Repository, analyzer analyzer.Analytic) service {
+func NewService(helmClient Helm, repository Repository, analyzer Analytic) service {
 	return service{
 		helmClient: helmClient,
 		repository: repository,

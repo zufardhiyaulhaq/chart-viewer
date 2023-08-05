@@ -1,20 +1,16 @@
 package analyzer
 
 import (
-	"chart-viewer/pkg/model"
 	"fmt"
 	"strings"
 
+	"chart-viewer/pkg/model"
 	"gopkg.in/yaml.v3"
 )
 
 type analytic struct{}
 
-type Analytic interface {
-	Analyze(templates []model.Template, kubeAPIVersions model.KubernetesAPIVersion) ([]model.AnalyticsResult, error)
-}
-
-func New() Analytic {
+func New() analytic {
 	return analytic{}
 }
 
