@@ -4,29 +4,12 @@ import (
 	"github.com/go-redis/redis"
 )
 
-type Repository interface {
-	Set(string, string)
-	Get(string) string
-}
-
 type repository struct {
 	redisClient *redis.Client
 }
 
-func NewRepository(redisAddress string) (Repository, error) {
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: redisAddress,
-	})
-
-	status := redisClient.Ping()
-	err := status.Err()
-	if err != nil {
-		return nil, err
-	}
-
-	return repository{
-		redisClient: redisClient,
-	}, nil
+func NewRepository(redisClient *redis.Client) repository {
+	return repository{redisClient: redisClient}
 }
 
 func (r repository) Set(key string, value string) {

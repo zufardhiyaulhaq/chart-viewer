@@ -10,7 +10,7 @@ import (
 	"chart-viewer/pkg/model"
 	"chart-viewer/pkg/repository"
 	"chart-viewer/pkg/server/service"
-
+	"github.com/go-redis/redis"
 	"github.com/spf13/cobra"
 )
 
@@ -23,6 +23,11 @@ type Service interface {
 	GetStringifiedManifests(repoName, chartName, chartVersion, hash string) string
 	GetChart(repoName string, chartName string, chartVersion string) (error, model.ChartDetail)
 	AnalyzeTemplate(templates []model.Template, kubeVersion string) ([]model.AnalyticsResult, error)
+}
+
+type Repository interface {
+	Set(string, string)
+	Get(string) string
 }
 
 var wg = &sync.WaitGroup{}
@@ -41,12 +46,18 @@ func NewSeedCommand() *cobra.Command {
 		Example: "chart-viewer seed --redis-host 127.0.0.1 --redis-port 6379 --seed-file ./seed.json",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			redisAddress := fmt.Sprintf("%s:%s", redisHost, redisPort)
+			redisClient := redis.NewClient(&redis.Options{
+				Addr: redisAddress,
+			})
 
-			repo, err := repository.NewRepository(redisAddress)
+			status := redisClient.Ping()
+			err := status.Err()
 			if err != nil {
 				log.Printf("cannot connect to redis: %s\n", err)
 				return err
 			}
+
+			repo := repository.NewRepository(redisClient)
 
 			log.Printf("connected to redis on %s:%s\n", redisHost, redisPort)
 			log.Println("starting to populate redis...")
@@ -76,7 +87,7 @@ func NewSeedCommand() *cobra.Command {
 	return &command
 }
 
-func seedKubeVersion(repo repository.Repository, path string) error {
+func seedKubeVersion(repo Repository, path string) error {
 	apiVersions, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -87,7 +98,7 @@ func seedKubeVersion(repo repository.Repository, path string) error {
 	return nil
 }
 
-func seedRepo(repo repository.Repository, seedPath string) error {
+func seedRepo(repo Repository, seedPath string) error {
 	repos, err := os.ReadFile(seedPath)
 	if err != nil {
 		return err
@@ -99,7 +110,7 @@ func seedRepo(repo repository.Repository, seedPath string) error {
 	return nil
 }
 
-func seedChart(repo repository.Repository) {
+func seedChart(repo Repository) {
 	h := helm.NewHelmClient(repo)
 	svc := service.NewService(h, repo, nil)
 

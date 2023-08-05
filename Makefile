@@ -8,6 +8,7 @@ build-frontend:
 	cd ui; make build
 
 test:
+	go clean -testcache
 	go test -cover ./...
 
 run:build-backend build-frontend

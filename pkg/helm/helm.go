@@ -2,14 +2,14 @@ package helm
 
 import (
 	"bytes"
-	"chart-viewer/pkg/model"
-	"chart-viewer/pkg/repository"
 	"fmt"
 	"log"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+
+	"chart-viewer/pkg/model"
 
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart/loader"
@@ -25,16 +25,21 @@ type Helm interface {
 	RenderManifest(chartUrl, chartName, chartVersion string, files []string) (error, []model.Manifest)
 }
 
+type Repository interface {
+	Set(string, string)
+	Get(string) string
+}
+
 type helm struct {
 	client     *action.Install
-	repository repository.Repository
+	repository Repository
 }
 
 var settings = cli.New()
 
 func debug(format string, v ...interface{}) {}
 
-func NewHelmClient(repository repository.Repository) Helm {
+func NewHelmClient(repository Repository) Helm {
 	actionConfig := new(action.Configuration)
 	err := actionConfig.Init(settings.RESTClientGetter(), settings.Namespace(), "", debug)
 	if err != nil {

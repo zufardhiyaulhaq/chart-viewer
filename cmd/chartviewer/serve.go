@@ -10,7 +10,7 @@ import (
 	"chart-viewer/pkg/repository"
 	"chart-viewer/pkg/server/handler"
 	"chart-viewer/pkg/server/service"
-
+	"github.com/go-redis/redis"
 	"github.com/gorilla/mux"
 	"github.com/spf13/cobra"
 )
@@ -27,7 +27,7 @@ func NewServeCommand() *cobra.Command {
 		Use:     "serve",
 		Short:   "Start the http server",
 		Example: "chart-viewer serve --host 127.0.0.1 --port 9999 --redis-host 127.0.0.1 --redis-port 6379",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			host := defaultHost
 			port := defaultPort
 			redisHost := defaultRedisHost
@@ -36,11 +36,18 @@ func NewServeCommand() *cobra.Command {
 			redisAddress := fmt.Sprintf("%s:%s", redisHost, redisPort)
 			address := fmt.Sprintf("%s:%s", host, port)
 
-			repo, err := repository.NewRepository(redisAddress)
+			redisClient := redis.NewClient(&redis.Options{
+				Addr: redisAddress,
+			})
+
+			status := redisClient.Ping()
+			err := status.Err()
 			if err != nil {
-				fmt.Printf("cannot connect to redis: %s\n", err)
-				return
+				log.Printf("cannot connect to redis: %s\n", err)
+				return err
 			}
+
+			repo := repository.NewRepository(redisClient)
 
 			helmClient := helm.NewHelmClient(repo)
 			analyser := analyzer.New()
@@ -49,6 +56,8 @@ func NewServeCommand() *cobra.Command {
 
 			log.Printf("server run on http://%s\n", address)
 			log.Fatal(http.ListenAndServe(address, r))
+
+			return nil
 		},
 	}
 

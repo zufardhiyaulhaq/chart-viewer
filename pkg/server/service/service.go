@@ -13,17 +13,21 @@ import (
 	"chart-viewer/pkg/analyzer"
 	"chart-viewer/pkg/helm"
 	"chart-viewer/pkg/model"
-	"chart-viewer/pkg/repository"
 	"gopkg.in/yaml.v3"
 )
 
+type Repository interface {
+	Set(string, string)
+	Get(string) string
+}
+
 type service struct {
 	helmClient helm.Helm
-	repository repository.Repository
+	repository Repository
 	analyzer   analyzer.Analytic
 }
 
-func NewService(helmClient helm.Helm, repository repository.Repository, analyzer analyzer.Analytic) service {
+func NewService(helmClient helm.Helm, repository Repository, analyzer analyzer.Analytic) service {
 	return service{
 		helmClient: helmClient,
 		repository: repository,
