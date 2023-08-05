@@ -2,18 +2,19 @@ package handler_test
 
 import (
 	"bytes"
-	"chart-viewer/pkg/server/handler"
-	"chart-viewer/pkg/model"
-	"chart-viewer/pkg/server/service/mocks"
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/kinbiko/jsonassert"
-	"github.com/stretchr/testify/assert"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"chart-viewer/mocks"
+	"chart-viewer/pkg/model"
+	"chart-viewer/pkg/server/handler"
+	"github.com/gorilla/mux"
+	"github.com/kinbiko/jsonassert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHandler_GetRepos(t *testing.T) {
@@ -31,7 +32,7 @@ func TestHandler_GetRepos(t *testing.T) {
 	h := http.HandlerFunc(appHandler.GetReposHandler)
 	h.ServeHTTP(recorder, req)
 
-	content, err := ioutil.ReadAll(recorder.Body)
+	content, err := io.ReadAll(recorder.Body)
 	if err != nil {
 		t.Error(err)
 	}
@@ -59,7 +60,7 @@ func TestHandler_GetChartsHandler(t *testing.T) {
 	router.HandleFunc("/charts/{repo-name}", appHandler.GetChartsHandler)
 	router.ServeHTTP(recorder, req)
 
-	content, err := ioutil.ReadAll(recorder.Body)
+	content, err := io.ReadAll(recorder.Body)
 	if err != nil {
 		t.Error(err)
 	}
@@ -83,6 +84,16 @@ func TestHandler_GetChartHandler(t *testing.T) {
 	}
 	serviceMock := new(mocks.Service)
 	serviceMock.On("GetChart", "repo-name", "chart-name", "chart-version").Return(nil, chart).Once()
+	serviceMock.On("")
+	serviceMock.On("AnalyzeTemplate", chart.Templates, "").Return([]model.AnalyticsResult{
+		{
+			Template: model.Template{
+				Name:    "deployment.yaml",
+				Content: "kind: Deployment",
+			},
+			Compatible: true,
+		},
+	}, nil).Once()
 	appHandler := handler.NewHandler(serviceMock)
 
 	req, err := http.NewRequest("GET", "/charts/repo-name/chart-name/chart-version", nil)
@@ -93,7 +104,7 @@ func TestHandler_GetChartHandler(t *testing.T) {
 	router.HandleFunc("/charts/{repo-name}/{chart-name}/{chart-version}", appHandler.GetChartHandler)
 	router.ServeHTTP(recorder, req)
 
-	content, err := ioutil.ReadAll(recorder.Body)
+	content, err := io.ReadAll(recorder.Body)
 	if err != nil {
 		t.Error(err)
 	}
@@ -106,7 +117,8 @@ func TestHandler_GetChartHandler(t *testing.T) {
 	   "templates":[
 		  {
 			 "name":"deployment.yaml",
-			 "content":"kind: Deployment"
+			 "content":"kind: Deployment",
+             "compatible": true
 		  }
 	   ]
 	}`)
@@ -132,7 +144,7 @@ func TestHandler_GetValuesHandler(t *testing.T) {
 	router.HandleFunc("/charts/values/{repo-name}/{chart-name}/{chart-version}", appHandler.GetValuesHandler)
 	router.ServeHTTP(recorder, req)
 
-	content, err := ioutil.ReadAll(recorder.Body)
+	content, err := io.ReadAll(recorder.Body)
 	if err != nil {
 		t.Error(err)
 	}
@@ -155,7 +167,7 @@ func TestHandler_GetTemplateHandler(t *testing.T) {
 		{Name: "service.yaml", Content: "kind: Service"},
 	}
 	serviceMock := new(mocks.Service)
-	serviceMock.On("GetTemplates", "repo-name", "chart-name", "chart-version").Return(templates).Once()
+	serviceMock.On("GetTemplates", "repo-name", "chart-name", "chart-version").Return(templates, nil).Once()
 	appHandler := handler.NewHandler(serviceMock)
 
 	req, err := http.NewRequest("GET", "/charts/templates/repo-name/chart-name/chart-version", nil)
@@ -166,7 +178,7 @@ func TestHandler_GetTemplateHandler(t *testing.T) {
 	router.HandleFunc("/charts/templates/{repo-name}/{chart-name}/{chart-version}", appHandler.GetTemplatesHandler)
 	router.ServeHTTP(recorder, req)
 
-	content, err := ioutil.ReadAll(recorder.Body)
+	content, err := io.ReadAll(recorder.Body)
 	if err != nil {
 		t.Error(err)
 	}
@@ -210,7 +222,7 @@ data:
 	router.HandleFunc("/charts/manifests/{repo-name}/{chart-name}/{chart-version}/{hash}", appHandler.GetManifestsHandler)
 	router.ServeHTTP(recorder, req)
 
-	content, err := ioutil.ReadAll(recorder.Body)
+	content, err := io.ReadAll(recorder.Body)
 	if err != nil {
 		t.Error(err)
 	}
@@ -240,7 +252,7 @@ func TestHandler_RenderManifestsHandler(t *testing.T) {
 	router.HandleFunc("/charts/templates/render/{repo-name}/{chart-name}/{chart-version}", appHandler.RenderManifestsHandler)
 	router.ServeHTTP(recorder, req)
 
-	content, err := ioutil.ReadAll(recorder.Body)
+	content, err := io.ReadAll(recorder.Body)
 	if err != nil {
 		t.Error(err)
 	}

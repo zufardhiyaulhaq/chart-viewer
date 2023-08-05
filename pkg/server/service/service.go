@@ -2,17 +2,18 @@ package service
 
 import (
 	"bytes"
-	"chart-viewer/pkg/analyzer"
-	"chart-viewer/pkg/helm"
-	"chart-viewer/pkg/model"
-	"chart-viewer/pkg/repository"
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 
+	"chart-viewer/pkg/analyzer"
+	"chart-viewer/pkg/helm"
+	"chart-viewer/pkg/model"
+	"chart-viewer/pkg/repository"
 	"gopkg.in/yaml.v3"
 )
 
@@ -67,7 +68,7 @@ func (s *service) GetCharts(repoName string) (error, []model.Chart) {
 		return err, nil
 	}
 
-	content, err := ioutil.ReadAll(response.Body)
+	content, err := io.ReadAll(response.Body)
 
 	repoDetail := new(model.RepoDetailResponse)
 	err = yaml.Unmarshal(content, &repoDetail)

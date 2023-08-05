@@ -1,14 +1,15 @@
 package handler
 
 import (
-	"chart-viewer/pkg/model"
-	"chart-viewer/pkg/server/service"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
+
+	"chart-viewer/pkg/model"
+	"chart-viewer/pkg/server/service"
 
 	"github.com/gorilla/mux"
 )
@@ -50,15 +51,15 @@ func (h *handler) GetChartHandler(w http.ResponseWriter, r *http.Request) {
 
 	err, chart := h.service.GetChart(repoName, chartName, chartVersion)
 	if err != nil {
-		errMessage := fmt.Sprintf("Cannot get chart %s/%s:%s : %s", repoName, chartName, chartVersion, err.Error())
+		errMessage := fmt.Sprintf("Cannot get chart %s/%s:%s : %s", repoName, chartName, chartVersion, err)
 		respondWithError(w, http.StatusInternalServerError, errMessage)
 		return
 	}
 
 	analyticsResults, err := h.service.AnalyzeTemplate(chart.Templates, kubeVersion)
 	if err != nil {
-		log.Printf("error while analyzing the template: %s\n", err)
-		respondWithError(w, 500, err.Error())
+		errMessage := fmt.Sprintf("error while analyzing the template %s/%s:%s : %s", repoName, chartName, chartVersion, err)
+		respondWithError(w, http.StatusInternalServerError, errMessage)
 		return
 	}
 
