@@ -11,7 +11,6 @@ import (
 	"net/http"
 
 	"chart-viewer/pkg/analyzer"
-	"chart-viewer/pkg/helm"
 	"chart-viewer/pkg/model"
 	"gopkg.in/yaml.v3"
 )
@@ -21,13 +20,19 @@ type Repository interface {
 	Get(string) string
 }
 
+type Helm interface {
+	GetValues(chartUrl, chartName, chartVersion string) (error, map[string]interface{})
+	GetManifest(chartUrl, chartName, chartVersion string) ([]model.Template, error)
+	RenderManifest(chartUrl, chartName, chartVersion string, files []string) (error, []model.Manifest)
+}
+
 type service struct {
-	helmClient helm.Helm
+	helmClient Helm
 	repository Repository
 	analyzer   analyzer.Analytic
 }
 
-func NewService(helmClient helm.Helm, repository Repository, analyzer analyzer.Analytic) service {
+func NewService(helmClient Helm, repository Repository, analyzer analyzer.Analytic) service {
 	return service{
 		helmClient: helmClient,
 		repository: repository,

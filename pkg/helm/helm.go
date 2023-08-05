@@ -19,12 +19,6 @@ import (
 	"helm.sh/helm/v3/pkg/releaseutil"
 )
 
-type Helm interface {
-	GetValues(chartUrl, chartName, chartVersion string) (error, map[string]interface{})
-	GetManifest(chartUrl, chartName, chartVersion string) ([]model.Template, error)
-	RenderManifest(chartUrl, chartName, chartVersion string, files []string) (error, []model.Manifest)
-}
-
 type Repository interface {
 	Set(string, string)
 	Get(string) string
@@ -39,7 +33,7 @@ var settings = cli.New()
 
 func debug(format string, v ...interface{}) {}
 
-func NewHelmClient(repository Repository) Helm {
+func NewHelmClient(repository Repository) helm {
 	actionConfig := new(action.Configuration)
 	err := actionConfig.Init(settings.RESTClientGetter(), settings.Namespace(), "", debug)
 	if err != nil {
@@ -51,7 +45,7 @@ func NewHelmClient(repository Repository) Helm {
 	client.ClientOnly = true
 	client.UseReleaseName = true
 
-	return &helm{
+	return helm{
 		client:     client,
 		repository: repository,
 	}
