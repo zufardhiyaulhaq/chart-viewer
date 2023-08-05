@@ -22,7 +22,7 @@ func TestHandler_GetRepos(t *testing.T) {
 		{Name: "stable", URL: "https://repo.stable"},
 	}
 	serviceMock := new(mocks.Service)
-	serviceMock.On("GetRepos").Return(repos).Once()
+	serviceMock.On("GetRepos").Return(repos, nil)
 	appHandler := handler.NewHandler(serviceMock)
 
 	req, err := http.NewRequest("GET", "/repos", nil)
@@ -49,7 +49,7 @@ func TestHandler_GetChartsHandler(t *testing.T) {
 		{Name: "job-deployment", Versions: []string{"v0.2.0", "v0.2.1"}},
 	}
 	serviceMock := new(mocks.Service)
-	serviceMock.On("GetCharts", "stable").Return(nil, charts).Once()
+	serviceMock.On("GetCharts", "stable").Return(charts, nil)
 	appHandler := handler.NewHandler(serviceMock)
 
 	req, err := http.NewRequest("GET", "/charts/stable", nil)
@@ -83,7 +83,7 @@ func TestHandler_GetChartHandler(t *testing.T) {
 		},
 	}
 	serviceMock := new(mocks.Service)
-	serviceMock.On("GetChart", "repo-name", "chart-name", "chart-version").Return(nil, chart).Once()
+	serviceMock.On("GetChart", "repo-name", "chart-name", "chart-version").Return(chart, nil)
 	serviceMock.On("")
 	serviceMock.On("AnalyzeTemplate", chart.Templates, "").Return([]model.AnalyticsResult{
 		{
@@ -133,7 +133,7 @@ func TestHandler_GetValuesHandler(t *testing.T) {
 		},
 	}
 	serviceMock := new(mocks.Service)
-	serviceMock.On("GetValues", "repo-name", "chart-name", "chart-version").Return(nil, values).Once()
+	serviceMock.On("GetValues", "repo-name", "chart-name", "chart-version").Return(values, nil)
 	appHandler := handler.NewHandler(serviceMock)
 
 	req, err := http.NewRequest("GET", "/charts/values/repo-name/chart-name/chart-version", nil)
@@ -211,7 +211,7 @@ data:
     include  "/opt/bitnami/nginx/conf/server_blocks/common/*.conf";
 `
 	serviceMock := new(mocks.Service)
-	serviceMock.On("GetStringifiedManifests", "repo-name", "chart-name", "chart-version", "hash").Return(stringfiedManifests).Once()
+	serviceMock.On("GetStringifiedManifests", "repo-name", "chart-name", "chart-version", "hash").Return(stringfiedManifests, nil)
 	appHandler := handler.NewHandler(serviceMock)
 
 	req, err := http.NewRequest("GET", "/charts/manifests/repo-name/chart-name/chart-version/hash", nil)
@@ -240,7 +240,7 @@ func TestHandler_RenderManifestsHandler(t *testing.T) {
 	}
 	fileLocation := fmt.Sprintf("/tmp/%s-values.yaml", time.Now().Format("20060102150405"))
 	serviceMock := new(mocks.Service)
-	serviceMock.On("RenderManifest", "repo-name", "chart-name", "chart-version", []string{fileLocation}).Return(nil, manifests).Once()
+	serviceMock.On("RenderManifest", "repo-name", "chart-name", "chart-version", []string{fileLocation}).Return(manifests, nil)
 	appHandler := handler.NewHandler(serviceMock)
 
 	requestBody := []byte(`{"values": "affinity:{}"}`)

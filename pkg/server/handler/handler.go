@@ -3,9 +3,9 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"chart-viewer/pkg/model"
@@ -13,13 +13,13 @@ import (
 )
 
 type Service interface {
-	GetRepos() []model.Repo
-	GetCharts(repoName string) (error, []model.Chart)
-	GetValues(repoName, chartName, chartVersion string) (error, map[string]interface{})
+	GetRepos() ([]model.Repo, error)
+	GetCharts(repoName string) ([]model.Chart, error)
+	GetValues(repoName, chartName, chartVersion string) (map[string]interface{}, error)
 	GetTemplates(repoName, chartName, chartVersion string) ([]model.Template, error)
-	RenderManifest(repoName, chartName, chartVersion string, values []string) (error, model.ManifestResponse)
-	GetStringifiedManifests(repoName, chartName, chartVersion, hash string) string
-	GetChart(repoName string, chartName string, chartVersion string) (error, model.ChartDetail)
+	RenderManifest(repoName, chartName, chartVersion string, values []string) (model.ManifestResponse, error)
+	GetStringifiedManifests(repoName, chartName, chartVersion, hash string) (string, error)
+	GetChart(repoName string, chartName string, chartVersion string) (model.ChartDetail, error)
 	AnalyzeTemplate(templates []model.Template, kubeVersion string) ([]model.AnalyticsResult, error)
 }
 
@@ -34,14 +34,19 @@ func NewHandler(service Service) handler {
 }
 
 func (h *handler) GetReposHandler(w http.ResponseWriter, r *http.Request) {
-	chartRepo := h.service.GetRepos()
+	chartRepo, err := h.service.GetRepos()
+	if err != nil {
+		errMessage := fmt.Sprintf("cannot get repos: %s", err.Error())
+		respondWithError(w, http.StatusInternalServerError, errMessage)
+		return
+	}
 	respondWithJSON(w, http.StatusOK, chartRepo)
 }
 
 func (h *handler) GetChartsHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	repoName := vars["repo-name"]
-	err, charts := h.service.GetCharts(repoName)
+	charts, err := h.service.GetCharts(repoName)
 	if err != nil {
 		errMessage := fmt.Sprintf("Cannot get charts from repos %s: %s", repoName, err.Error())
 		respondWithError(w, http.StatusInternalServerError, errMessage)
@@ -58,7 +63,7 @@ func (h *handler) GetChartHandler(w http.ResponseWriter, r *http.Request) {
 	chartVersion := vars["chart-version"]
 	kubeVersion := r.URL.Query().Get("kube-version")
 
-	err, chart := h.service.GetChart(repoName, chartName, chartVersion)
+	chart, err := h.service.GetChart(repoName, chartName, chartVersion)
 	if err != nil {
 		errMessage := fmt.Sprintf("Cannot get chart %s/%s:%s : %s", repoName, chartName, chartVersion, err)
 		respondWithError(w, http.StatusInternalServerError, errMessage)
@@ -86,7 +91,7 @@ func (h *handler) GetValuesHandler(w http.ResponseWriter, r *http.Request) {
 	chartName := vars["chart-name"]
 	chartVersion := vars["chart-version"]
 
-	err, values := h.service.GetValues(repoName, chartName, chartVersion)
+	values, err := h.service.GetValues(repoName, chartName, chartVersion)
 	if err != nil {
 		errMessage := fmt.Sprintf("Cannot get values of %s/%s:%s : %s", repoName, chartName, chartVersion, err.Error())
 		respondWithError(w, http.StatusInternalServerError, errMessage)
@@ -104,6 +109,7 @@ func (h *handler) GetTemplatesHandler(w http.ResponseWriter, r *http.Request) {
 	templates, err := h.service.GetTemplates(repoName, chartName, chartVersion)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error getting templates: "+err.Error())
+		return
 	}
 
 	respondWithJSON(w, http.StatusOK, templates)
@@ -116,7 +122,12 @@ func (h *handler) GetManifestsHandler(w http.ResponseWriter, r *http.Request) {
 	chartVersion := vars["chart-version"]
 	hash := vars["hash"]
 
-	manifest := h.service.GetStringifiedManifests(repoName, chartName, chartVersion, hash)
+	manifest, err := h.service.GetStringifiedManifests(repoName, chartName, chartVersion, hash)
+	if err != nil {
+		errMessage := fmt.Sprintf("cannot get stringified manifest: %s", err.Error())
+		respondWithError(w, http.StatusInternalServerError, errMessage)
+		return
+	}
 
 	respondWithText(w, http.StatusOK, manifest)
 }
@@ -142,14 +153,14 @@ func (h *handler) RenderManifestsHandler(w http.ResponseWriter, r *http.Request)
 
 	valueBytes := []byte(values)
 	fileLocation := fmt.Sprintf("/tmp/%s-values.yaml", time.Now().Format("20060102150405"))
-	err = ioutil.WriteFile(fileLocation, valueBytes, 0644)
+	err = os.WriteFile(fileLocation, valueBytes, 0644)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Cannot store values to file: "+err.Error())
 		return
 	}
 
 	valueFile := []string{fileLocation}
-	err, manifests := h.service.RenderManifest(repoName, chartName, chartVersion, valueFile)
+	manifests, err := h.service.RenderManifest(repoName, chartName, chartVersion, valueFile)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error rendering manifest: "+err.Error())
 		return
@@ -177,7 +188,6 @@ func (h *handler) CORS(next http.Handler) http.Handler {
 
 func (h *handler) LoggerMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		log.Printf("in coming request: %s\n", r.URL.Path)
 
 		next.ServeHTTP(w, r)

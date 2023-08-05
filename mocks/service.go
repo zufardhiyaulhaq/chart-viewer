@@ -40,60 +40,64 @@ func (_m *Service) AnalyzeTemplate(templates []model.Template, kubeVersion strin
 }
 
 // GetChart provides a mock function with given fields: repoName, chartName, chartVersion
-func (_m *Service) GetChart(repoName string, chartName string, chartVersion string) (error, model.ChartDetail) {
+func (_m *Service) GetChart(repoName string, chartName string, chartVersion string) (model.ChartDetail, error) {
 	ret := _m.Called(repoName, chartName, chartVersion)
 
-	var r0 error
-	var r1 model.ChartDetail
-	if rf, ok := ret.Get(0).(func(string, string, string) (error, model.ChartDetail)); ok {
+	var r0 model.ChartDetail
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string, string, string) (model.ChartDetail, error)); ok {
 		return rf(repoName, chartName, chartVersion)
 	}
-	if rf, ok := ret.Get(0).(func(string, string, string) error); ok {
+	if rf, ok := ret.Get(0).(func(string, string, string) model.ChartDetail); ok {
 		r0 = rf(repoName, chartName, chartVersion)
 	} else {
-		r0 = ret.Error(0)
+		r0 = ret.Get(0).(model.ChartDetail)
 	}
 
-	if rf, ok := ret.Get(1).(func(string, string, string) model.ChartDetail); ok {
+	if rf, ok := ret.Get(1).(func(string, string, string) error); ok {
 		r1 = rf(repoName, chartName, chartVersion)
 	} else {
-		r1 = ret.Get(1).(model.ChartDetail)
+		r1 = ret.Error(1)
 	}
 
 	return r0, r1
 }
 
 // GetCharts provides a mock function with given fields: repoName
-func (_m *Service) GetCharts(repoName string) (error, []model.Chart) {
+func (_m *Service) GetCharts(repoName string) ([]model.Chart, error) {
 	ret := _m.Called(repoName)
 
-	var r0 error
-	var r1 []model.Chart
-	if rf, ok := ret.Get(0).(func(string) (error, []model.Chart)); ok {
+	var r0 []model.Chart
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string) ([]model.Chart, error)); ok {
 		return rf(repoName)
 	}
-	if rf, ok := ret.Get(0).(func(string) error); ok {
+	if rf, ok := ret.Get(0).(func(string) []model.Chart); ok {
 		r0 = rf(repoName)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]model.Chart)
+		}
 	}
 
-	if rf, ok := ret.Get(1).(func(string) []model.Chart); ok {
+	if rf, ok := ret.Get(1).(func(string) error); ok {
 		r1 = rf(repoName)
 	} else {
-		if ret.Get(1) != nil {
-			r1 = ret.Get(1).([]model.Chart)
-		}
+		r1 = ret.Error(1)
 	}
 
 	return r0, r1
 }
 
 // GetRepos provides a mock function with given fields:
-func (_m *Service) GetRepos() []model.Repo {
+func (_m *Service) GetRepos() ([]model.Repo, error) {
 	ret := _m.Called()
 
 	var r0 []model.Repo
+	var r1 error
+	if rf, ok := ret.Get(0).(func() ([]model.Repo, error)); ok {
+		return rf()
+	}
 	if rf, ok := ret.Get(0).(func() []model.Repo); ok {
 		r0 = rf()
 	} else {
@@ -102,21 +106,37 @@ func (_m *Service) GetRepos() []model.Repo {
 		}
 	}
 
-	return r0
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // GetStringifiedManifests provides a mock function with given fields: repoName, chartName, chartVersion, hash
-func (_m *Service) GetStringifiedManifests(repoName string, chartName string, chartVersion string, hash string) string {
+func (_m *Service) GetStringifiedManifests(repoName string, chartName string, chartVersion string, hash string) (string, error) {
 	ret := _m.Called(repoName, chartName, chartVersion, hash)
 
 	var r0 string
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string, string, string, string) (string, error)); ok {
+		return rf(repoName, chartName, chartVersion, hash)
+	}
 	if rf, ok := ret.Get(0).(func(string, string, string, string) string); ok {
 		r0 = rf(repoName, chartName, chartVersion, hash)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
 
-	return r0
+	if rf, ok := ret.Get(1).(func(string, string, string, string) error); ok {
+		r1 = rf(repoName, chartName, chartVersion, hash)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // GetTemplates provides a mock function with given fields: repoName, chartName, chartVersion
@@ -146,50 +166,50 @@ func (_m *Service) GetTemplates(repoName string, chartName string, chartVersion 
 }
 
 // GetValues provides a mock function with given fields: repoName, chartName, chartVersion
-func (_m *Service) GetValues(repoName string, chartName string, chartVersion string) (error, map[string]interface{}) {
+func (_m *Service) GetValues(repoName string, chartName string, chartVersion string) (map[string]interface{}, error) {
 	ret := _m.Called(repoName, chartName, chartVersion)
 
-	var r0 error
-	var r1 map[string]interface{}
-	if rf, ok := ret.Get(0).(func(string, string, string) (error, map[string]interface{})); ok {
+	var r0 map[string]interface{}
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string, string, string) (map[string]interface{}, error)); ok {
 		return rf(repoName, chartName, chartVersion)
 	}
-	if rf, ok := ret.Get(0).(func(string, string, string) error); ok {
+	if rf, ok := ret.Get(0).(func(string, string, string) map[string]interface{}); ok {
 		r0 = rf(repoName, chartName, chartVersion)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[string]interface{})
+		}
 	}
 
-	if rf, ok := ret.Get(1).(func(string, string, string) map[string]interface{}); ok {
+	if rf, ok := ret.Get(1).(func(string, string, string) error); ok {
 		r1 = rf(repoName, chartName, chartVersion)
 	} else {
-		if ret.Get(1) != nil {
-			r1 = ret.Get(1).(map[string]interface{})
-		}
+		r1 = ret.Error(1)
 	}
 
 	return r0, r1
 }
 
 // RenderManifest provides a mock function with given fields: repoName, chartName, chartVersion, values
-func (_m *Service) RenderManifest(repoName string, chartName string, chartVersion string, values []string) (error, model.ManifestResponse) {
+func (_m *Service) RenderManifest(repoName string, chartName string, chartVersion string, values []string) (model.ManifestResponse, error) {
 	ret := _m.Called(repoName, chartName, chartVersion, values)
 
-	var r0 error
-	var r1 model.ManifestResponse
-	if rf, ok := ret.Get(0).(func(string, string, string, []string) (error, model.ManifestResponse)); ok {
+	var r0 model.ManifestResponse
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string, string, string, []string) (model.ManifestResponse, error)); ok {
 		return rf(repoName, chartName, chartVersion, values)
 	}
-	if rf, ok := ret.Get(0).(func(string, string, string, []string) error); ok {
+	if rf, ok := ret.Get(0).(func(string, string, string, []string) model.ManifestResponse); ok {
 		r0 = rf(repoName, chartName, chartVersion, values)
 	} else {
-		r0 = ret.Error(0)
+		r0 = ret.Get(0).(model.ManifestResponse)
 	}
 
-	if rf, ok := ret.Get(1).(func(string, string, string, []string) model.ManifestResponse); ok {
+	if rf, ok := ret.Get(1).(func(string, string, string, []string) error); ok {
 		r1 = rf(repoName, chartName, chartVersion, values)
 	} else {
-		r1 = ret.Get(1).(model.ManifestResponse)
+		r1 = ret.Error(1)
 	}
 
 	return r0, r1

@@ -12,11 +12,16 @@ func NewRepository(redisClient *redis.Client) repository {
 	return repository{redisClient: redisClient}
 }
 
-func (r repository) Set(key string, value string) {
-	_ = r.redisClient.Set(key, value, 0)
+func (r repository) Set(key string, value string) error {
+	status := r.redisClient.Set(key, value, 0)
+	return status.Err()
 }
 
-func (r repository) Get(key string) string {
-	value, _ := r.redisClient.Get(key).Result()
-	return value
+func (r repository) Get(key string) (string, error) {
+	status := r.redisClient.Get(key)
+	if status.Err() != nil {
+		return "", status.Err()
+	}
+
+	return status.Result()
 }

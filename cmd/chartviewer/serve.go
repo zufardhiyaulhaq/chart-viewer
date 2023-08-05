@@ -28,18 +28,15 @@ func NewServeCommand() *cobra.Command {
 		Short:   "Start the http server",
 		Example: "chart-viewer serve --host 127.0.0.1 --port 9999 --redis-host 127.0.0.1 --redis-port 6379",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			host := defaultHost
-			port := defaultPort
+			appHost := defaultHost
+			appPort := defaultPort
 			redisHost := defaultRedisHost
 			redisPort := defaultRedisPort
 
 			redisAddress := fmt.Sprintf("%s:%s", redisHost, redisPort)
-			address := fmt.Sprintf("%s:%s", host, port)
+			address := fmt.Sprintf("%s:%s", appHost, appPort)
 
-			redisClient := redis.NewClient(&redis.Options{
-				Addr: redisAddress,
-			})
-
+			redisClient := redis.NewClient(&redis.Options{Addr: redisAddress})
 			status := redisClient.Ping()
 			err := status.Err()
 			if err != nil {
@@ -48,7 +45,6 @@ func NewServeCommand() *cobra.Command {
 			}
 
 			repo := repository.NewRepository(redisClient)
-
 			helmClient := helm.NewHelmClient(repo)
 			analyser := analyzer.New()
 			svc := service.NewService(helmClient, repo, analyser)

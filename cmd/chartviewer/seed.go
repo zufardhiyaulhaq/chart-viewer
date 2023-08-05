@@ -15,19 +15,19 @@ import (
 )
 
 type Service interface {
-	GetRepos() []model.Repo
-	GetCharts(repoName string) (error, []model.Chart)
-	GetValues(repoName, chartName, chartVersion string) (error, map[string]interface{})
+	GetRepos() ([]model.Repo, error)
+	GetCharts(repoName string) ([]model.Chart, error)
+	GetValues(repoName, chartName, chartVersion string) (map[string]interface{}, error)
 	GetTemplates(repoName, chartName, chartVersion string) ([]model.Template, error)
-	RenderManifest(repoName, chartName, chartVersion string, values []string) (error, model.ManifestResponse)
-	GetStringifiedManifests(repoName, chartName, chartVersion, hash string) string
-	GetChart(repoName string, chartName string, chartVersion string) (error, model.ChartDetail)
+	RenderManifest(repoName, chartName, chartVersion string, values []string) (model.ManifestResponse, error)
+	GetStringifiedManifests(repoName, chartName, chartVersion, hash string) (string, error)
+	GetChart(repoName string, chartName string, chartVersion string) (model.ChartDetail, error)
 	AnalyzeTemplate(templates []model.Template, kubeVersion string) ([]model.AnalyticsResult, error)
 }
 
 type Repository interface {
-	Set(string, string)
-	Get(string) string
+	Set(string, string) error
+	Get(string) (string, error)
 }
 
 var wg = &sync.WaitGroup{}
@@ -73,7 +73,11 @@ func NewSeedCommand() *cobra.Command {
 				log.Printf("failed to seed chart repository: %s\n", err)
 				return err
 			}
-			seedChart(repo)
+
+			err = seedChart(repo)
+			if err != nil {
+				log.Printf("failed to seed chart: %s\n", err)
+			}
 			wg.Wait()
 
 			return nil
@@ -110,21 +114,26 @@ func seedRepo(repo Repository, seedPath string) error {
 	return nil
 }
 
-func seedChart(repo Repository) {
+func seedChart(repo Repository) error {
 	h := helm.NewHelmClient(repo)
 	svc := service.NewService(h, repo, nil)
 
-	chartRepos := svc.GetRepos()
+	chartRepos, err := svc.GetRepos()
+	if err != nil {
+		return err
+	}
 
 	for _, repo := range chartRepos {
 		wg.Add(1)
 		go pullChart(svc, repo)
 	}
+
+	return nil
 }
 
 func pullChart(svc Service, repo model.Repo) {
 	defer wg.Done()
-	err, charts := svc.GetCharts(repo.Name)
+	charts, err := svc.GetCharts(repo.Name)
 	if err != nil {
 		log.Printf("error populating charts from repo %s: %s", repo.Name, err)
 		return
@@ -134,7 +143,7 @@ func pullChart(svc Service, repo model.Repo) {
 		versions := chart.Versions
 		for _, version := range versions {
 			log.Printf("populating %s/%s:%s\n", repo.Name, chart.Name, version)
-			err, _ := svc.GetChart(repo.Name, chart.Name, version)
+			_, err := svc.GetChart(repo.Name, chart.Name, version)
 
 			if err != nil {
 				log.Printf("error populating charts %s: %s", repo.Name, err)

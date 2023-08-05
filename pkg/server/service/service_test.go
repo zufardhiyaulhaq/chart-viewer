@@ -17,9 +17,10 @@ func TestService_GetRepos(t *testing.T) {
 	analyzer := new(mocks.Analytic)
 	helm := new(mocks.Helm)
 	stringifiedRepos := "[{\"name\":\"stable\",\"url\":\"https://chart.stable.com\"}]"
-	repository.On("Get", "repos").Return(stringifiedRepos).Once()
+	repository.On("Get", "repos").Return(stringifiedRepos, nil).Once()
 	svc := service.NewService(helm, repository, analyzer)
-	charts := svc.GetRepos()
+	charts, err := svc.GetRepos()
+	assert.NoError(t, err)
 
 	expectedCharts := []model.Repo{
 		{
@@ -37,9 +38,9 @@ func TestService_GetChartsFromCache(t *testing.T) {
 	repository := new(mocks.Repository)
 	analyzer := new(mocks.Analytic)
 	helm := new(mocks.Helm)
-	repository.On("Get", "stable").Return(stringifiedChart)
+	repository.On("Get", "stable").Return(stringifiedChart, nil)
 	svc := service.NewService(helm, repository, analyzer)
-	err, charts := svc.GetCharts("stable")
+	charts, err := svc.GetCharts("stable")
 	assert.NoError(t, err)
 
 	expectedCharts := []model.Chart{
@@ -60,9 +61,9 @@ func TestService_GetValuesFromCache(t *testing.T) {
 	repository := new(mocks.Repository)
 	analyzer := new(mocks.Analytic)
 	helm := new(mocks.Helm)
-	repository.On("Get", "value-stable-app-deploy-v0.0.1").Return(stringifiedValues)
+	repository.On("Get", "value-stable-app-deploy-v0.0.1").Return(stringifiedValues, nil)
 	svc := service.NewService(helm, repository, analyzer)
-	err, values := svc.GetValues("stable", "app-deploy", "v0.0.1")
+	values, err := svc.GetValues("stable", "app-deploy", "v0.0.1")
 	assert.NoError(t, err)
 
 	expectedValues := map[string]interface{}{
@@ -82,7 +83,7 @@ func TestService_GetTemplatesFromCache(t *testing.T) {
 	repository := new(mocks.Repository)
 	analyzer := new(mocks.Analytic)
 	helm := new(mocks.Helm)
-	repository.On("Get", "template-stable-app-deploy-v0.0.1").Return(stringifiedTemplates)
+	repository.On("Get", "template-stable-app-deploy-v0.0.1").Return(stringifiedTemplates, nil)
 	svc := service.NewService(helm, repository, analyzer)
 	templates, err := svc.GetTemplates("stable", "app-deploy", "v0.0.1")
 	assert.NoError(t, err)
@@ -103,9 +104,10 @@ func TestService_GetStringifiedManifestsFromCache(t *testing.T) {
 	repository := new(mocks.Repository)
 	analyzer := new(mocks.Analytic)
 	helm := new(mocks.Helm)
-	repository.On("Get", "manifests-stable-app-deploy-v0.0.1-hash").Return(stringifiedManifest)
+	repository.On("Get", "manifests-stable-app-deploy-v0.0.1-hash").Return(stringifiedManifest, nil)
 	svc := service.NewService(helm, repository, analyzer)
-	manifest := svc.GetStringifiedManifests("stable", "app-deploy", "v0.0.1", "hash")
+	manifest, err := svc.GetStringifiedManifests("stable", "app-deploy", "v0.0.1", "hash")
+	assert.NoError(t, err)
 
 	expectedManifests := "---\nkind: Deployment\n"
 
@@ -129,13 +131,13 @@ func TestService_RenderManifest(t *testing.T) {
 	analyzer := new(mocks.Analytic)
 	helm := new(mocks.Helm)
 
-	repository.On("Get", "manifests-stable-app-deploy-v0.0.1-"+hash).Return("")
-	repository.On("Get", "repos").Return(repos)
-	repository.On("Set", "manifests-stable-app-deploy-v0.0.1-"+hash, rawManifest)
-	helm.On("RenderManifest", "https://charts.helm.sh/stable", "app-deploy", "v0.0.1", []string{"/tmp/values.yaml"}).Return(nil, manifest)
+	repository.On("Get", "manifests-stable-app-deploy-v0.0.1-"+hash).Return(rawManifest, nil)
+	repository.On("Get", "repos").Return(repos, nil)
+	repository.On("Set", "manifests-stable-app-deploy-v0.0.1-"+hash, rawManifest).Return(nil)
+	helm.On("RenderManifest", "https://charts.helm.sh/stable", "app-deploy", "v0.0.1", []string{"/tmp/values.yaml"}).Return(manifest, nil)
 
 	svc := service.NewService(helm, repository, analyzer)
-	err, actualManifest := svc.RenderManifest("stable", "app-deploy", "v0.0.1", []string{"/tmp/values.yaml"})
+	actualManifest, err := svc.RenderManifest("stable", "app-deploy", "v0.0.1", []string{"/tmp/values.yaml"})
 	assert.NoError(t, err)
 
 	expectedManifests := model.ManifestResponse{
@@ -166,11 +168,11 @@ func TestService_RenderManifest_Cached(t *testing.T) {
 	repository := new(mocks.Repository)
 	analyzer := new(mocks.Analytic)
 	helm := new(mocks.Helm)
-	repository.On("Get", "manifests-stable-app-deploy-v0.0.1-"+hash).Return(stringifiedManifest)
-	helm.On("RenderManifest", "https://charts.helm.sh/stable", "app-deploy", "v0.0.1", []string{"/tmp/values.yaml"}).Return(nil, manifest)
+	repository.On("Get", "manifests-stable-app-deploy-v0.0.1-"+hash).Return(stringifiedManifest, nil)
+	helm.On("RenderManifest", "https://charts.helm.sh/stable", "app-deploy", "v0.0.1", []string{"/tmp/values.yaml"}).Return(manifest, nil)
 
 	svc := service.NewService(helm, repository, analyzer)
-	err, actualManifest := svc.RenderManifest("stable", "app-deploy", "v0.0.1", []string{"/tmp/values.yaml"})
+	actualManifest, err := svc.RenderManifest("stable", "app-deploy", "v0.0.1", []string{"/tmp/values.yaml"})
 	assert.NoError(t, err)
 
 	expectedManifests := model.ManifestResponse{

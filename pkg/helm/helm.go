@@ -20,8 +20,8 @@ import (
 )
 
 type Repository interface {
-	Set(string, string)
-	Get(string) string
+	Set(string, string) error
+	Get(string) (string, error)
 }
 
 type helm struct {

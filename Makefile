@@ -29,3 +29,6 @@ package:
 publish-image:
 	docker push ecojuntak/${APP_NAME}:${APP_VERSION} 
 	docker push ecojuntak/${APP_NAME}:latest
+
+generate-mock:
+	 mockery --all --case snake
