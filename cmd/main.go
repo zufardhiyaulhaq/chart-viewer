@@ -1,8 +1,15 @@
 package main
 
-import "chart-viewer/cmd/chartviewer"
+import (
+	"os"
+
+	"chart-viewer/cmd/chartviewer"
+)
 
 func main() {
 	cmd := chartviewer.NewRootCommand()
-	cmd.Execute()
+	err := cmd.Execute()
+	if err != nil {
+		os.Exit(1)
+	}
 }
