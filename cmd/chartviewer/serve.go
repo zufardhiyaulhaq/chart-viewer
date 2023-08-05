@@ -1,14 +1,15 @@
 package chartviewer
 
 import (
+	"fmt"
+	"log"
+	"net/http"
+
 	"chart-viewer/pkg/analyzer"
 	"chart-viewer/pkg/helm"
 	"chart-viewer/pkg/repository"
 	"chart-viewer/pkg/server/handler"
 	"chart-viewer/pkg/server/service"
-	"fmt"
-	"log"
-	"net/http"
 
 	"github.com/gorilla/mux"
 	"github.com/spf13/cobra"
@@ -59,7 +60,7 @@ func NewServeCommand() *cobra.Command {
 	return &command
 }
 
-func createRouter(svc service.Service) *mux.Router {
+func createRouter(svc Service) *mux.Router {
 	r := mux.NewRouter()
 
 	appHandler := handler.NewHandler(svc)

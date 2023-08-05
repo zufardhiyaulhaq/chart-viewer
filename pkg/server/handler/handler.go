@@ -9,16 +9,25 @@ import (
 	"time"
 
 	"chart-viewer/pkg/model"
-	"chart-viewer/pkg/server/service"
-
 	"github.com/gorilla/mux"
 )
 
-type handler struct {
-	service service.Service
+type Service interface {
+	GetRepos() []model.Repo
+	GetCharts(repoName string) (error, []model.Chart)
+	GetValues(repoName, chartName, chartVersion string) (error, map[string]interface{})
+	GetTemplates(repoName, chartName, chartVersion string) ([]model.Template, error)
+	RenderManifest(repoName, chartName, chartVersion string, values []string) (error, model.ManifestResponse)
+	GetStringifiedManifests(repoName, chartName, chartVersion, hash string) string
+	GetChart(repoName string, chartName string, chartVersion string) (error, model.ChartDetail)
+	AnalyzeTemplate(templates []model.Template, kubeVersion string) ([]model.AnalyticsResult, error)
 }
 
-func NewHandler(service service.Service) handler {
+type handler struct {
+	service Service
+}
+
+func NewHandler(service Service) handler {
 	return handler{
 		service: service,
 	}

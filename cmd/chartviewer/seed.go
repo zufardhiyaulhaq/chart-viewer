@@ -1,17 +1,29 @@
 package chartviewer
 
 import (
+	"fmt"
+	"log"
+	"os"
+	"sync"
+
 	"chart-viewer/pkg/helm"
 	"chart-viewer/pkg/model"
 	"chart-viewer/pkg/repository"
 	"chart-viewer/pkg/server/service"
-	"fmt"
-	"io/ioutil"
-	"log"
-	"sync"
 
 	"github.com/spf13/cobra"
 )
+
+type Service interface {
+	GetRepos() []model.Repo
+	GetCharts(repoName string) (error, []model.Chart)
+	GetValues(repoName, chartName, chartVersion string) (error, map[string]interface{})
+	GetTemplates(repoName, chartName, chartVersion string) ([]model.Template, error)
+	RenderManifest(repoName, chartName, chartVersion string, values []string) (error, model.ManifestResponse)
+	GetStringifiedManifests(repoName, chartName, chartVersion, hash string) string
+	GetChart(repoName string, chartName string, chartVersion string) (error, model.ChartDetail)
+	AnalyzeTemplate(templates []model.Template, kubeVersion string) ([]model.AnalyticsResult, error)
+}
 
 var wg = &sync.WaitGroup{}
 
@@ -65,7 +77,7 @@ func NewSeedCommand() *cobra.Command {
 }
 
 func seedKubeVersion(repo repository.Repository, path string) error {
-	apiVersions, err := ioutil.ReadFile(path)
+	apiVersions, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
@@ -76,7 +88,7 @@ func seedKubeVersion(repo repository.Repository, path string) error {
 }
 
 func seedRepo(repo repository.Repository, seedPath string) error {
-	repos, err := ioutil.ReadFile(seedPath)
+	repos, err := os.ReadFile(seedPath)
 	if err != nil {
 		return err
 	}
@@ -99,7 +111,7 @@ func seedChart(repo repository.Repository) {
 	}
 }
 
-func pullChart(svc service.Service, repo model.Repo) {
+func pullChart(svc Service, repo model.Repo) {
 	defer wg.Done()
 	err, charts := svc.GetCharts(repo.Name)
 	if err != nil {
