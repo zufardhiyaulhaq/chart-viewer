@@ -56,7 +56,7 @@ func (h *handler) GetCharts(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, charts)
 }
 
-func (h *handler) GetChartHandler(w http.ResponseWriter, r *http.Request) {
+func (h *handler) GetChart(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	repoName := vars["repo-name"]
 	chartName := vars["chart-name"]
@@ -65,14 +65,14 @@ func (h *handler) GetChartHandler(w http.ResponseWriter, r *http.Request) {
 
 	chart, err := h.service.GetChart(repoName, chartName, chartVersion)
 	if err != nil {
-		errMessage := fmt.Sprintf("Cannot get chart %s/%s:%s : %s", repoName, chartName, chartVersion, err)
+		errMessage := fmt.Sprintf("error when get chart %s/%s:%s: %s", repoName, chartName, chartVersion, err)
 		respondWithError(w, http.StatusInternalServerError, errMessage)
 		return
 	}
 
 	analyticsResults, err := h.service.AnalyzeTemplate(chart.Templates, kubeVersion)
 	if err != nil {
-		errMessage := fmt.Sprintf("error while analyzing the template %s/%s:%s : %s", repoName, chartName, chartVersion, err)
+		errMessage := fmt.Sprintf("error when analyzing the chart %s/%s:%s: %s", repoName, chartName, chartVersion, err)
 		respondWithError(w, http.StatusInternalServerError, errMessage)
 		return
 	}

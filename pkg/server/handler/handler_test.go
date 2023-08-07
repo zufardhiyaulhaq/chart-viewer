@@ -138,84 +138,109 @@ func Test_handler_GetCharts(t *testing.T) {
 	}
 }
 
-func TestHandler_GetChartsHandler(t *testing.T) {
-	charts := []model.Chart{
-		{Name: "app-deployment", Versions: []string{"v0.0.1", "v0.0.2"}},
-		{Name: "job-deployment", Versions: []string{"v0.2.0", "v0.2.1"}},
+func Test_handler_GetChart(t *testing.T) {
+	type fields struct {
+		service *mocks.Service
 	}
-	serviceMock := new(mocks.Service)
-	serviceMock.On("GetCharts", "stable").Return(charts, nil)
-	appHandler := handler.NewHandler(serviceMock)
-
-	req, err := http.NewRequest("GET", "/charts/stable", nil)
-	assert.NoError(t, err)
-
-	recorder := httptest.NewRecorder()
-	router := mux.NewRouter()
-	router.HandleFunc("/charts/{repo-name}", appHandler.GetCharts)
-	router.ServeHTTP(recorder, req)
-
-	content, err := io.ReadAll(recorder.Body)
-	if err != nil {
-		t.Error(err)
-	}
-
-	ja := jsonassert.New(t)
-	ja.Assertf(string(content), `[
-		{"name": "app-deployment","versions": ["v0.0.1", "v0.0.2"]},
-		{"name": "job-deployment","versions": ["v0.2.0", "v0.2.1"]}
-	]`)
-}
-
-func TestHandler_GetChartHandler(t *testing.T) {
-	chart := model.ChartDetail{
-		Values: map[string]interface{}{"appPort": float64(8080)},
-		Templates: []model.Template{
-			{
-				Name:    "deployment.yaml",
-				Content: "kind: Deployment",
-			},
-		},
-	}
-	serviceMock := new(mocks.Service)
-	serviceMock.On("GetChart", "repo-name", "chart-name", "chart-version").Return(chart, nil)
-	serviceMock.On("AnalyzeTemplate", chart.Templates, "").Return([]model.AnalyticsResult{
+	tests := []struct {
+		name           string
+		fields         fields
+		expectedResult string
+		expectedCode   int
+		mockFn         func(ff fields)
+	}{
 		{
-			Template: model.Template{
-				Name:    "deployment.yaml",
-				Content: "kind: Deployment",
+			name:   "should return 200 when success fetching chart",
+			fields: fields{service: new(mocks.Service)},
+			expectedResult: `{
+				"values":{
+					"appPort":8080
+				},
+				"templates":[
+					{
+						"name":"deployment.yaml",
+						"content":"kind: Deployment",
+						"compatible": true
+					}
+				]
+			}`,
+			expectedCode: http.StatusOK,
+			mockFn: func(ff fields) {
+				chart := model.ChartDetail{
+					Values: map[string]interface{}{"appPort": 8080},
+					Templates: []model.Template{
+						{
+							Name:    "deployment.yaml",
+							Content: "kind: Deployment",
+						},
+					},
+				}
+
+				ff.service.On("GetChart", "repo-name", "chart-name", "chart-version").Return(chart, nil)
+				ff.service.On("AnalyzeTemplate", chart.Templates, "").Return([]model.AnalyticsResult{
+					{
+						Template: model.Template{
+							Name:    "deployment.yaml",
+							Content: "kind: Deployment",
+						},
+						Compatible: true,
+					},
+				}, nil)
 			},
-			Compatible: true,
 		},
-	}, nil).Once()
-	appHandler := handler.NewHandler(serviceMock)
+		{
+			name:           "should return 500 when service layer failed to get chart",
+			fields:         fields{service: new(mocks.Service)},
+			expectedResult: `{"error": "error when get chart repo-name/chart-name:chart-version: error"}`,
+			expectedCode:   http.StatusInternalServerError,
+			mockFn: func(ff fields) {
+				ff.service.On("GetChart", "repo-name", "chart-name", "chart-version").Return(model.ChartDetail{}, errors.New("error"))
+			},
+		},
+		{
+			name:           "should return 500 when service layer failed to analyze chart",
+			fields:         fields{service: new(mocks.Service)},
+			expectedResult: `{"error": "error when analyzing the chart repo-name/chart-name:chart-version: error"}`,
+			expectedCode:   http.StatusInternalServerError,
+			mockFn: func(ff fields) {
+				chart := model.ChartDetail{
+					Values: map[string]interface{}{"appPort": 8080},
+					Templates: []model.Template{
+						{
+							Name:    "deployment.yaml",
+							Content: "kind: Deployment",
+						},
+					},
+				}
 
-	req, err := http.NewRequest("GET", "/charts/repo-name/chart-name/chart-version", nil)
-	assert.NoError(t, err)
-
-	recorder := httptest.NewRecorder()
-	router := mux.NewRouter()
-	router.HandleFunc("/charts/{repo-name}/{chart-name}/{chart-version}", appHandler.GetChartHandler)
-	router.ServeHTTP(recorder, req)
-
-	content, err := io.ReadAll(recorder.Body)
-	if err != nil {
-		t.Error(err)
+				ff.service.On("GetChart", "repo-name", "chart-name", "chart-version").Return(chart, nil)
+				ff.service.On("AnalyzeTemplate", chart.Templates, "").Return(nil, errors.New("error"))
+			},
+		},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.mockFn(tt.fields)
 
-	ja := jsonassert.New(t)
-	ja.Assertf(string(content), `{
-	   "values":{
-		  "appPort":8080
-	   },
-	   "templates":[
-		  {
-			 "name":"deployment.yaml",
-			 "content":"kind: Deployment",
-             "compatible": true
-		  }
-	   ]
-	}`)
+			req, err := http.NewRequest("GET", "/charts/repo-name/chart-name/chart-version", nil)
+			assert.NoError(t, err)
+
+			appHandler := handler.NewHandler(tt.fields.service)
+			recorder := httptest.NewRecorder()
+			router := mux.NewRouter()
+			router.HandleFunc("/charts/{repo-name}/{chart-name}/{chart-version}", appHandler.GetChart)
+			router.ServeHTTP(recorder, req)
+
+			content, err := io.ReadAll(recorder.Body)
+			if err != nil {
+				t.Error(err)
+			}
+
+			ja := jsonassert.New(t)
+			ja.Assertf(string(content), tt.expectedResult)
+			assert.Equal(t, recorder.Code, tt.expectedCode)
+		})
+	}
 }
 
 func TestHandler_GetValuesHandler(t *testing.T) {
