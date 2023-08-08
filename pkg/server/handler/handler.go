@@ -85,7 +85,7 @@ func (h *handler) GetChart(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, response)
 }
 
-func (h *handler) GetValuesHandler(w http.ResponseWriter, r *http.Request) {
+func (h *handler) GetValues(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	repoName := vars["repo-name"]
 	chartName := vars["chart-name"]
@@ -93,7 +93,7 @@ func (h *handler) GetValuesHandler(w http.ResponseWriter, r *http.Request) {
 
 	values, err := h.service.GetValues(repoName, chartName, chartVersion)
 	if err != nil {
-		errMessage := fmt.Sprintf("Cannot get values of %s/%s:%s : %s", repoName, chartName, chartVersion, err.Error())
+		errMessage := fmt.Sprintf("cannot get values of %s/%s:%s: %s", repoName, chartName, chartVersion, err.Error())
 		respondWithError(w, http.StatusInternalServerError, errMessage)
 		return
 	}
