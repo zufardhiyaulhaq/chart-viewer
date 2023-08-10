@@ -116,7 +116,7 @@ func (h *handler) GetTemplates(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, templates)
 }
 
-func (h *handler) GetManifestsHandler(w http.ResponseWriter, r *http.Request) {
+func (h *handler) GetManifests(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	repoName := vars["repo-name"]
 	chartName := vars["chart-name"]
@@ -125,7 +125,7 @@ func (h *handler) GetManifestsHandler(w http.ResponseWriter, r *http.Request) {
 
 	manifest, err := h.service.GetStringifiedManifests(repoName, chartName, chartVersion, hash)
 	if err != nil {
-		errMessage := fmt.Sprintf("cannot get stringified manifest: %s", err.Error())
+		errMessage := fmt.Sprintf("cannot get manifest: %s", err.Error())
 		respondWithError(w, http.StatusInternalServerError, errMessage)
 		return
 	}

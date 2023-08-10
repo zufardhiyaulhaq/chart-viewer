@@ -377,8 +377,21 @@ func Test_handler_GetTemplates(t *testing.T) {
 	}
 }
 
-func TestHandler_GetManifestsHandler(t *testing.T) {
-	stringfiedManifests := `
+func Test_handler_GetManifests(t *testing.T) {
+	type fields struct {
+		service *mocks.Service
+	}
+	tests := []struct {
+		name           string
+		fields         fields
+		expectedResult string
+		expectedCode   int
+		mockFn         func(ff fields)
+	}{
+		{
+			name:   "should return 200 when success to get manifest",
+			fields: fields{service: new(mocks.Service)},
+			expectedResult: `
 ---
 # Source: nginx/templates/server-block-configmap.yaml
 apiVersion: v1
@@ -387,32 +400,53 @@ metadata:
   name: nginx-server-block
   labels:
     app.kubernetes.io/name: nginx
-    helm.sh/chart: nginx-6.2.1
-    app.kubernetes.io/instance: nginx
-    app.kubernetes.io/managed-by: Helm
-data:
-  server-blocks-paths.conf: |-
-    include  "/opt/bitnami/nginx/conf/server_blocks/ldap/*.conf";
-    include  "/opt/bitnami/nginx/conf/server_blocks/common/*.conf";
+`,
+			expectedCode: http.StatusOK,
+			mockFn: func(ff fields) {
+				stringfiedManifests := `
+---
+# Source: nginx/templates/server-block-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-server-block
+  labels:
+    app.kubernetes.io/name: nginx
 `
-	serviceMock := new(mocks.Service)
-	serviceMock.On("GetStringifiedManifests", "repo-name", "chart-name", "chart-version", "hash").Return(stringfiedManifests, nil)
-	appHandler := handler.NewHandler(serviceMock)
-
-	req, err := http.NewRequest("GET", "/charts/manifests/repo-name/chart-name/chart-version/hash", nil)
-	assert.NoError(t, err)
-
-	recorder := httptest.NewRecorder()
-	router := mux.NewRouter()
-	router.HandleFunc("/charts/manifests/{repo-name}/{chart-name}/{chart-version}/{hash}", appHandler.GetManifestsHandler)
-	router.ServeHTTP(recorder, req)
-
-	content, err := io.ReadAll(recorder.Body)
-	if err != nil {
-		t.Error(err)
+				ff.service.On("GetStringifiedManifests", "repo-name", "chart-name", "chart-version", "hash").Return(stringfiedManifests, nil)
+			},
+		},
+		{
+			name:           "should return 500 when service layer return error",
+			fields:         fields{service: new(mocks.Service)},
+			expectedResult: `{"error":"cannot get manifest: error"}`,
+			expectedCode:   http.StatusInternalServerError,
+			mockFn: func(ff fields) {
+				ff.service.On("GetStringifiedManifests", "repo-name", "chart-name", "chart-version", "hash").Return("", errors.New("error"))
+			},
+		},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.mockFn(tt.fields)
 
-	assert.Equal(t, stringfiedManifests, string(content))
+			req, err := http.NewRequest("GET", "/charts/manifests/repo-name/chart-name/chart-version/hash", nil)
+			assert.NoError(t, err)
+
+			appHandler := handler.NewHandler(tt.fields.service)
+			recorder := httptest.NewRecorder()
+			router := mux.NewRouter()
+			router.HandleFunc("/charts/manifests/{repo-name}/{chart-name}/{chart-version}/{hash}", appHandler.GetManifests)
+			router.ServeHTTP(recorder, req)
+
+			content, err := io.ReadAll(recorder.Body)
+			if err != nil {
+				t.Error(err)
+			}
+
+			assert.Equal(t, tt.expectedResult, string(content))
+		})
+	}
 }
 
 func TestHandler_RenderManifestsHandler(t *testing.T) {
