@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"crypto/md5"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -12,24 +13,58 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestService_GetRepos(t *testing.T) {
-	repository := new(mocks.Repository)
-	analyzer := new(mocks.Analytic)
-	helm := new(mocks.Helm)
-	stringifiedRepos := "[{\"name\":\"stable\",\"url\":\"https://chart.stable.com\"}]"
-	repository.On("Get", "repos").Return(stringifiedRepos, nil).Once()
-	svc := service.NewService(helm, repository, analyzer)
-	charts, err := svc.GetRepos()
-	assert.NoError(t, err)
-
-	expectedCharts := []model.Repo{
+func Test_service_GetRepos(t *testing.T) {
+	type fields struct {
+		helm       *mocks.Helm
+		repository *mocks.Repository
+		analytic   *mocks.Analytic
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		want    []model.Repo
+		wantErr error
+		mockFn  func(ff fields)
+	}{
 		{
-			Name: "stable",
-			URL:  "https://chart.stable.com",
+			name: "should success to get repositories",
+			fields: fields{
+				repository: new(mocks.Repository),
+			},
+			want: []model.Repo{
+				{
+					Name: "stable",
+					URL:  "https://chart.stable.com",
+				},
+			},
+			wantErr: nil,
+			mockFn: func(ff fields) {
+				stringifiedRepos := `[{"name":"stable","url":"https://chart.stable.com"}]`
+				ff.repository.On("Get", "repos").Return(stringifiedRepos, nil)
+			},
+		},
+		{
+			name: "should return error if repository layer return error",
+			fields: fields{
+				repository: new(mocks.Repository),
+			},
+			want:    nil,
+			wantErr: errors.New("error"),
+			mockFn: func(ff fields) {
+				ff.repository.On("Get", "repos").Return("", errors.New("error"))
+			},
 		},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.mockFn(tt.fields)
 
-	assert.Equal(t, expectedCharts, charts)
+			svc := service.NewService(tt.fields.helm, tt.fields.repository, tt.fields.analytic)
+			actual, err := svc.GetRepos()
+			assert.Equal(t, err, tt.wantErr)
+			assert.Equal(t, actual, tt.want)
+		})
+	}
 }
 
 func TestService_GetChartsFromCache(t *testing.T) {
