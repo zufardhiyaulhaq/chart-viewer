@@ -449,41 +449,90 @@ metadata:
 	}
 }
 
-func TestHandler_RenderManifestsHandler(t *testing.T) {
-	manifests := model.ManifestResponse{
-		URL: "/charts/manifests/repo-name/chart-name/chart-version/hash",
-		Manifests: []model.Manifest{
-			{Name: "deployment.yaml", Content: "apiVersion: app/Deployment"},
-			{Name: "service.yaml", Content: "kind: Service"},
+func Test_handler_RenderManifests(t *testing.T) {
+	type fields struct {
+		service *mocks.Service
+	}
+	type args struct {
+		requestBody string
+	}
+	tests := []struct {
+		name           string
+		fields         fields
+		args           args
+		expectedResult string
+		expectedCode   int
+		mockFn         func(ff fields)
+	}{
+		{
+			name:   "should return 200 when success to render manifests",
+			fields: fields{service: new(mocks.Service)},
+			expectedResult: `
+				{
+					"url" : "/charts/manifests/repo-name/chart-name/chart-version/hash",
+					"manifests": [
+						{"name": "deployment.yaml", "content": "apiVersion: app/Deployment"},
+						{"name": "service.yaml", "content": "kind: Service"}
+					]
+				}
+			`,
+			args:         args{requestBody: `{"values": "affinity:{}"}`},
+			expectedCode: http.StatusOK,
+			mockFn: func(ff fields) {
+				manifests := model.ManifestResponse{
+					URL: "/charts/manifests/repo-name/chart-name/chart-version/hash",
+					Manifests: []model.Manifest{
+						{Name: "deployment.yaml", Content: "apiVersion: app/Deployment"},
+						{Name: "service.yaml", Content: "kind: Service"},
+					},
+				}
+				fileLocation := fmt.Sprintf("/tmp/%s-values.yaml", time.Now().Format("20060102150405"))
+				ff.service.On("RenderManifest", "repo-name", "chart-name", "chart-version", []string{fileLocation}).Return(manifests, nil)
+			},
+		},
+		{
+			name:           "should return 400 when error to decode request body",
+			fields:         fields{service: new(mocks.Service)},
+			expectedResult: `{"error": "cannot decode request body: invalid character 'm' looking for beginning of value"}`,
+			args:           args{requestBody: `malformed request body`},
+			expectedCode:   http.StatusBadRequest,
+			mockFn:         func(ff fields) {},
+		},
+		{
+			name:           "should return 500 when error to decode request body",
+			fields:         fields{service: new(mocks.Service)},
+			expectedResult: `{"error": "cannot render manifest: error"}`,
+			args:           args{requestBody: `{"values": "affinity:{}"}`},
+			expectedCode:   http.StatusInternalServerError,
+			mockFn: func(ff fields) {
+				fileLocation := fmt.Sprintf("/tmp/%s-values.yaml", time.Now().Format("20060102150405"))
+				ff.service.On("RenderManifest", "repo-name", "chart-name", "chart-version", []string{fileLocation}).Return(model.ManifestResponse{}, errors.New("error"))
+			},
 		},
 	}
-	fileLocation := fmt.Sprintf("/tmp/%s-values.yaml", time.Now().Format("20060102150405"))
-	serviceMock := new(mocks.Service)
-	serviceMock.On("RenderManifest", "repo-name", "chart-name", "chart-version", []string{fileLocation}).Return(manifests, nil)
-	appHandler := handler.NewHandler(serviceMock)
 
-	requestBody := []byte(`{"values": "affinity:{}"}`)
-	req, err := http.NewRequest("POST", "/charts/templates/render/repo-name/chart-name/chart-version", bytes.NewBuffer(requestBody))
-	assert.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.mockFn(tt.fields)
 
-	recorder := httptest.NewRecorder()
-	router := mux.NewRouter()
-	router.HandleFunc("/charts/templates/render/{repo-name}/{chart-name}/{chart-version}", appHandler.RenderManifestsHandler)
-	router.ServeHTTP(recorder, req)
+			request := []byte(tt.args.requestBody)
+			req, err := http.NewRequest("POST", "/charts/templates/render/repo-name/chart-name/chart-version", bytes.NewBuffer(request))
+			assert.NoError(t, err)
 
-	content, err := io.ReadAll(recorder.Body)
-	if err != nil {
-		t.Error(err)
+			appHandler := handler.NewHandler(tt.fields.service)
+			recorder := httptest.NewRecorder()
+			router := mux.NewRouter()
+			router.HandleFunc("/charts/templates/render/{repo-name}/{chart-name}/{chart-version}", appHandler.RenderManifests)
+			router.ServeHTTP(recorder, req)
+
+			content, err := io.ReadAll(recorder.Body)
+			if err != nil {
+				t.Error(err)
+			}
+
+			ja := jsonassert.New(t)
+			ja.Assertf(string(content), tt.expectedResult)
+			assert.Equal(t, recorder.Code, tt.expectedCode)
+		})
 	}
-
-	ja := jsonassert.New(t)
-	ja.Assertf(string(content), `
-		{
-			"url" : "/charts/manifests/repo-name/chart-name/chart-version/hash",
-			"manifests": [
-				{"name": "deployment.yaml", "content": "apiVersion: app/Deployment"},
-				{"name": "service.yaml", "content": "kind: Service"}
-			]
-		}
-	`)
 }

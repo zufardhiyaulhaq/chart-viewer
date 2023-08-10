@@ -78,7 +78,7 @@ func createRouter(svc Service) *mux.Router {
 	apiV1.HandleFunc("/charts/{repo-name}/{chart-name}/{chart-version}", appHandler.GetChart).Methods("GET")
 	apiV1.HandleFunc("/charts/values/{repo-name}/{chart-name}/{chart-version}", appHandler.GetValues).Methods("GET")
 	apiV1.HandleFunc("/charts/templates/{repo-name}/{chart-name}/{chart-version}", appHandler.GetTemplates).Methods("GET")
-	apiV1.HandleFunc("/charts/manifests/render/{repo-name}/{chart-name}/{chart-version}", appHandler.RenderManifestsHandler).Methods("POST", "OPTIONS")
+	apiV1.HandleFunc("/charts/manifests/render/{repo-name}/{chart-name}/{chart-version}", appHandler.RenderManifests).Methods("POST", "OPTIONS")
 	apiV1.HandleFunc("/charts/manifests/{repo-name}/{chart-name}/{chart-version}/{hash}", appHandler.GetManifests).Methods("GET")
 
 	fileServer := http.FileServer(http.Dir("ui/dist"))

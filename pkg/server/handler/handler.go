@@ -133,17 +133,14 @@ func (h *handler) GetManifests(w http.ResponseWriter, r *http.Request) {
 	respondWithText(w, http.StatusOK, manifest)
 }
 
-func (h *handler) RenderManifestsHandler(w http.ResponseWriter, r *http.Request) {
+func (h *handler) RenderManifests(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
-	type renderRequest struct {
-		Values string `json:"values"`
-	}
-
-	var req renderRequest
-
+	req := model.RenderRequest{}
 	err := decoder.Decode(&req)
 	if err != nil {
-		panic(err)
+		errMessage := fmt.Sprintf("cannot decode request body: %s", err.Error())
+		respondWithError(w, http.StatusBadRequest, errMessage)
+		return
 	}
 
 	vars := mux.Vars(r)
@@ -156,14 +153,16 @@ func (h *handler) RenderManifestsHandler(w http.ResponseWriter, r *http.Request)
 	fileLocation := fmt.Sprintf("/tmp/%s-values.yaml", time.Now().Format("20060102150405"))
 	err = os.WriteFile(fileLocation, valueBytes, 0644)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Cannot store values to file: "+err.Error())
+		errMessage := fmt.Sprintf("cannot store values to file: %s", err.Error())
+		respondWithError(w, http.StatusInternalServerError, errMessage)
 		return
 	}
 
 	valueFile := []string{fileLocation}
 	manifests, err := h.service.RenderManifest(repoName, chartName, chartVersion, valueFile)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Error rendering manifest: "+err.Error())
+		errMessage := fmt.Sprintf("cannot render manifest: %s", err.Error())
+		respondWithError(w, http.StatusInternalServerError, errMessage)
 		return
 	}
 

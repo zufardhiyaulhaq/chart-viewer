@@ -66,3 +66,7 @@ type AnalyticResponse struct {
 	Values    map[string]interface{} `json:"values"`
 	Templates []AnalyticsResult      `json:"templates"`
 }
+
+type RenderRequest struct {
+	Values string `json:"values"`
+}
