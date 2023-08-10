@@ -101,14 +101,15 @@ func (h *handler) GetValues(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, values)
 }
 
-func (h *handler) GetTemplatesHandler(w http.ResponseWriter, r *http.Request) {
+func (h *handler) GetTemplates(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	repoName := vars["repo-name"]
 	chartName := vars["chart-name"]
 	chartVersion := vars["chart-version"]
 	templates, err := h.service.GetTemplates(repoName, chartName, chartVersion)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Error getting templates: "+err.Error())
+		errMessage := fmt.Sprintf("cannot get templates of %s/%s:%s: %s", repoName, chartName, chartVersion, err.Error())
+		respondWithError(w, http.StatusInternalServerError, errMessage)
 		return
 	}
 

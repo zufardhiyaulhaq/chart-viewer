@@ -314,72 +314,67 @@ func Test_handler_GetValues(t *testing.T) {
 	}
 }
 
-func TestHandler_GetValuesHandler(t *testing.T) {
-	values := map[string]interface{}{
-		"values": map[string]interface{}{
-			"apiVersion":    "app/Deployment",
-			"cpuRequest":    11,
-			"enableService": true,
+func Test_handler_GetTemplates(t *testing.T) {
+	type fields struct {
+		service *mocks.Service
+	}
+	tests := []struct {
+		name           string
+		fields         fields
+		expectedResult string
+		expectedCode   int
+		mockFn         func(ff fields)
+	}{
+		{
+			name:   "should return 200 when success to get templates",
+			fields: fields{service: new(mocks.Service)},
+			expectedResult: `[
+				{"name": "deployment.yaml", "content": "apiVersion: app/Deployment"},
+				{"name": "service.yaml", "content": "kind: Service"}
+			]`,
+			expectedCode: http.StatusOK,
+			mockFn: func(ff fields) {
+				templates := []model.Template{
+					{Name: "deployment.yaml", Content: "apiVersion: app/Deployment"},
+					{Name: "service.yaml", Content: "kind: Service"},
+				}
+
+				ff.service.On("GetTemplates", "repo-name", "chart-name", "chart-version").Return(templates, nil)
+			},
+		},
+		{
+			name:           "should return 500 when service layer return error",
+			fields:         fields{service: new(mocks.Service)},
+			expectedResult: `{"error": "cannot get templates of repo-name/chart-name:chart-version: error"}`,
+			expectedCode:   http.StatusInternalServerError,
+			mockFn: func(ff fields) {
+				ff.service.On("GetTemplates", "repo-name", "chart-name", "chart-version").Return(nil, errors.New("error"))
+			},
 		},
 	}
-	serviceMock := new(mocks.Service)
-	serviceMock.On("GetValues", "repo-name", "chart-name", "chart-version").Return(values, nil)
-	appHandler := handler.NewHandler(serviceMock)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.mockFn(tt.fields)
 
-	req, err := http.NewRequest("GET", "/charts/values/repo-name/chart-name/chart-version", nil)
-	assert.NoError(t, err)
+			req, err := http.NewRequest("GET", "/charts/templates/repo-name/chart-name/chart-version", nil)
+			assert.NoError(t, err)
 
-	recorder := httptest.NewRecorder()
-	router := mux.NewRouter()
-	router.HandleFunc("/charts/values/{repo-name}/{chart-name}/{chart-version}", appHandler.GetValues)
-	router.ServeHTTP(recorder, req)
+			appHandler := handler.NewHandler(tt.fields.service)
+			recorder := httptest.NewRecorder()
+			router := mux.NewRouter()
+			router.HandleFunc("/charts/templates/{repo-name}/{chart-name}/{chart-version}", appHandler.GetTemplates)
+			router.ServeHTTP(recorder, req)
 
-	content, err := io.ReadAll(recorder.Body)
-	if err != nil {
-		t.Error(err)
-	}
-
-	ja := jsonassert.New(t)
-	ja.Assertf(string(content), `
-		{
-			"values": {
-				"apiVersion": "app/Deployment",
-				"cpuRequest": 11,
-				"enableService": true
+			content, err := io.ReadAll(recorder.Body)
+			if err != nil {
+				t.Error(err)
 			}
-		}
-	`)
-}
 
-func TestHandler_GetTemplateHandler(t *testing.T) {
-	templates := []model.Template{
-		{Name: "deployment.yaml", Content: "apiVersion: app/Deployment"},
-		{Name: "service.yaml", Content: "kind: Service"},
+			ja := jsonassert.New(t)
+			ja.Assertf(string(content), tt.expectedResult)
+			assert.Equal(t, recorder.Code, tt.expectedCode)
+		})
 	}
-	serviceMock := new(mocks.Service)
-	serviceMock.On("GetTemplates", "repo-name", "chart-name", "chart-version").Return(templates, nil).Once()
-	appHandler := handler.NewHandler(serviceMock)
-
-	req, err := http.NewRequest("GET", "/charts/templates/repo-name/chart-name/chart-version", nil)
-	assert.NoError(t, err)
-
-	recorder := httptest.NewRecorder()
-	router := mux.NewRouter()
-	router.HandleFunc("/charts/templates/{repo-name}/{chart-name}/{chart-version}", appHandler.GetTemplatesHandler)
-	router.ServeHTTP(recorder, req)
-
-	content, err := io.ReadAll(recorder.Body)
-	if err != nil {
-		t.Error(err)
-	}
-
-	ja := jsonassert.New(t)
-	ja.Assertf(string(content), `
-		[
-			{"name": "deployment.yaml", "content": "apiVersion: app/Deployment"},
-			{"name": "service.yaml", "content": "kind: Service"}
-		]
-	`)
 }
 
 func TestHandler_GetManifestsHandler(t *testing.T) {
