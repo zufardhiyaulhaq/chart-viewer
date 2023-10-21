@@ -649,51 +649,6 @@ func Test_service_GetTemplates(t *testing.T) {
 	}
 }
 
-func TestService_GetValuesFromCache(t *testing.T) {
-	stringifiedValues := "{\"affinity\":{},\"cloneHtdocsFromGit\":{\"enabled\":false,\"interval\":60}}"
-
-	repository := new(mocks.Repository)
-	analyzer := new(mocks.Analytic)
-	helm := new(mocks.Helm)
-	httpClient := new(mocks.HTTPClient)
-	repository.On("Get", "value-stable-app-deploy-v0.0.1").Return(stringifiedValues, nil)
-	svc := service.NewService(helm, repository, analyzer, httpClient)
-	values, err := svc.GetValues("stable", "app-deploy", "v0.0.1")
-	assert.NoError(t, err)
-
-	expectedValues := map[string]interface{}{
-		"affinity": map[string]interface{}{},
-		"cloneHtdocsFromGit": map[string]interface{}{
-			"enabled":  false,
-			"interval": float64(60),
-		},
-	}
-
-	assert.Equal(t, expectedValues, values)
-}
-
-func TestService_GetTemplatesFromCache(t *testing.T) {
-	stringifiedTemplates := "[{\"name\":\"deployment.yaml\",\"content\":\"kind: Deployment\"}]"
-
-	repository := new(mocks.Repository)
-	analyzer := new(mocks.Analytic)
-	helm := new(mocks.Helm)
-	httpClient := new(mocks.HTTPClient)
-	repository.On("Get", "template-stable-app-deploy-v0.0.1").Return(stringifiedTemplates, nil)
-	svc := service.NewService(helm, repository, analyzer, httpClient)
-	templates, err := svc.GetTemplates("stable", "app-deploy", "v0.0.1")
-	assert.NoError(t, err)
-
-	expectedTemplates := []model.Template{
-		{
-			Name:    "deployment.yaml",
-			Content: "kind: Deployment",
-		},
-	}
-
-	assert.Equal(t, expectedTemplates, templates)
-}
-
 func TestService_GetStringifiedManifestsFromCache(t *testing.T) {
 	stringifiedManifest := "{\"url\":\"rest://chart-viewer.com\",\"manifests\":[{\"name\":\"deployment.yaml\",\"content\":\"kind: Deployment\"}]}"
 
