@@ -259,6 +259,200 @@ entries:
 	}
 }
 
+func Test_service_GetValues(t *testing.T) {
+	type fields struct {
+		helm       *mocks.Helm
+		repository *mocks.Repository
+		analyzer   *mocks.Analytic
+		httpClient *mocks.HTTPClient
+	}
+	type args struct {
+		repoName     string
+		chartName    string
+		chartVersion string
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    map[string]interface{}
+		wantErr error
+		mockFn  func(ff fields, aa args)
+	}{
+		{
+			name: "should success to get values from cache",
+			fields: fields{
+				helm:       new(mocks.Helm),
+				repository: new(mocks.Repository),
+			},
+			args: args{
+				repoName:     "repo",
+				chartName:    "chart",
+				chartVersion: "v0.0.1",
+			},
+			want: map[string]interface{}{
+				"ingress": map[string]interface{}{
+					"enabled": false,
+				},
+			},
+			wantErr: nil,
+			mockFn: func(ff fields, aa args) {
+				cacheKey := fmt.Sprintf("value-%s-%s-%s", aa.repoName, aa.chartName, aa.chartVersion)
+
+				stringifiedValues := `{"ingress": {"enabled": false}}`
+				ff.repository.On("Get", cacheKey).Return(stringifiedValues, nil)
+			},
+		},
+		{
+			name: "should success to get values from remote if values not exist in cache and store it to cache",
+			fields: fields{
+				helm:       new(mocks.Helm),
+				repository: new(mocks.Repository),
+			},
+			args: args{
+				repoName:     "repo",
+				chartName:    "chart",
+				chartVersion: "v0.0.1",
+			},
+			want: map[string]interface{}{
+				"ingress": map[string]interface{}{
+					"enabled": false,
+				},
+			},
+			wantErr: nil,
+			mockFn: func(ff fields, aa args) {
+				cacheKey := fmt.Sprintf("value-%s-%s-%s", aa.repoName, aa.chartName, aa.chartVersion)
+
+				stringifiedValues := `{}`
+				ff.repository.On("Get", cacheKey).Return(stringifiedValues, nil)
+
+				stringifiedRepos := `[{"name":"repo","url":"https://repoName.test.com"}]`
+				ff.repository.On("Get", "repos").Return(stringifiedRepos, nil)
+
+				values := map[string]interface{}{
+					"ingress": map[string]interface{}{
+						"enabled": false,
+					},
+				}
+				ff.helm.On("GetValues", "https://repoName.test.com", aa.chartName, aa.chartVersion).Return(values, nil)
+
+				chartsValues, _ := json.Marshal(values)
+				ff.repository.On("Set", cacheKey, string(chartsValues)).Return(nil)
+			},
+		},
+		{
+			name: "should failed if repo return error when getting values from cache",
+			fields: fields{
+				helm:       new(mocks.Helm),
+				repository: new(mocks.Repository),
+			},
+			args: args{
+				repoName:     "repo",
+				chartName:    "chart",
+				chartVersion: "v0.0.1",
+			},
+			want:    nil,
+			wantErr: errors.New("error"),
+			mockFn: func(ff fields, aa args) {
+				cacheKey := fmt.Sprintf("value-%s-%s-%s", aa.repoName, aa.chartName, aa.chartVersion)
+
+				ff.repository.On("Get", cacheKey).Return("", errors.New("error"))
+			},
+		},
+		{
+			name: "should failed if repository return error when getting repos from cache",
+			fields: fields{
+				helm:       new(mocks.Helm),
+				repository: new(mocks.Repository),
+			},
+			args: args{
+				repoName:     "repo",
+				chartName:    "chart",
+				chartVersion: "v0.0.1",
+			},
+			want:    nil,
+			wantErr: errors.New("error"),
+			mockFn: func(ff fields, aa args) {
+				cacheKey := fmt.Sprintf("value-%s-%s-%s", aa.repoName, aa.chartName, aa.chartVersion)
+
+				stringifiedValues := `{}`
+				ff.repository.On("Get", cacheKey).Return(stringifiedValues, nil)
+
+				ff.repository.On("Get", "repos").Return("", errors.New("error"))
+			},
+		},
+
+		{
+			name: "should failed if repository return error when getting values from cache",
+			fields: fields{
+				helm:       new(mocks.Helm),
+				repository: new(mocks.Repository),
+			},
+			args: args{
+				repoName:     "repo",
+				chartName:    "chart",
+				chartVersion: "v0.0.1",
+			},
+			want:    nil,
+			wantErr: errors.New("error"),
+			mockFn: func(ff fields, aa args) {
+				cacheKey := fmt.Sprintf("value-%s-%s-%s", aa.repoName, aa.chartName, aa.chartVersion)
+
+				stringifiedValues := `{}`
+				ff.repository.On("Get", cacheKey).Return(stringifiedValues, nil)
+
+				stringifiedRepos := `[{"name":"repo","url":"https://repoName.test.com"}]`
+				ff.repository.On("Get", "repos").Return(stringifiedRepos, nil)
+
+				ff.helm.On("GetValues", "https://repoName.test.com", aa.chartName, aa.chartVersion).Return(nil, errors.New("error"))
+			},
+		},
+		{
+			name: "should failed when service failed to store values to cache",
+			fields: fields{
+				helm:       new(mocks.Helm),
+				repository: new(mocks.Repository),
+			},
+			args: args{
+				repoName:     "repo",
+				chartName:    "chart",
+				chartVersion: "v0.0.1",
+			},
+			want:    nil,
+			wantErr: errors.New("error"),
+			mockFn: func(ff fields, aa args) {
+				cacheKey := fmt.Sprintf("value-%s-%s-%s", aa.repoName, aa.chartName, aa.chartVersion)
+
+				stringifiedValues := `{}`
+				ff.repository.On("Get", cacheKey).Return(stringifiedValues, nil)
+
+				stringifiedRepos := `[{"name":"repo","url":"https://repoName.test.com"}]`
+				ff.repository.On("Get", "repos").Return(stringifiedRepos, nil)
+
+				values := map[string]interface{}{
+					"ingress": map[string]interface{}{
+						"enabled": false,
+					},
+				}
+				ff.helm.On("GetValues", "https://repoName.test.com", aa.chartName, aa.chartVersion).Return(values, nil)
+
+				chartsValues, _ := json.Marshal(values)
+				ff.repository.On("Set", cacheKey, string(chartsValues)).Return(errors.New("error"))
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.mockFn(tt.fields, tt.args)
+
+			svc := service.NewService(tt.fields.helm, tt.fields.repository, tt.fields.analyzer, tt.fields.httpClient)
+			actual, err := svc.GetValues(tt.args.repoName, tt.args.chartName, tt.args.chartVersion)
+			assert.Equal(t, tt.wantErr, err)
+			assert.Equal(t, tt.want, actual)
+		})
+	}
+}
+
 func TestService_GetValuesFromCache(t *testing.T) {
 	stringifiedValues := "{\"affinity\":{},\"cloneHtdocsFromGit\":{\"enabled\":false,\"interval\":60}}"
 
