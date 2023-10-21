@@ -116,7 +116,7 @@ func seedRepo(repo Repository, seedPath string) error {
 
 func seedChart(repo Repository) error {
 	h := helm.NewHelmClient(repo)
-	svc := service.NewService(h, repo, nil)
+	svc := service.NewService(h, repo, nil, nil)
 
 	chartRepos, err := svc.GetRepos()
 	if err != nil {

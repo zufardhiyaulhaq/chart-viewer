@@ -8,6 +8,7 @@ import (
 	"chart-viewer/pkg/analyzer"
 	"chart-viewer/pkg/helm"
 	"chart-viewer/pkg/repository"
+	"chart-viewer/pkg/rest"
 	"chart-viewer/pkg/server/handler"
 	"chart-viewer/pkg/server/service"
 	"github.com/go-redis/redis"
@@ -25,7 +26,7 @@ func NewServeCommand() *cobra.Command {
 
 	command := cobra.Command{
 		Use:     "serve",
-		Short:   "Start the http server",
+		Short:   "Start the rest server",
 		Example: "chart-viewer serve --host 127.0.0.1 --port 9999 --redis-host 127.0.0.1 --redis-port 6379",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			appHost := defaultHost
@@ -47,7 +48,8 @@ func NewServeCommand() *cobra.Command {
 			repo := repository.NewRepository(redisClient)
 			helmClient := helm.NewHelmClient(repo)
 			analyser := analyzer.New()
-			svc := service.NewService(helmClient, repo, analyser)
+			restClient := rest.New()
+			svc := service.NewService(helmClient, repo, analyser, restClient)
 			r := createRouter(svc)
 
 			log.Printf("server run on http://%s\n", address)

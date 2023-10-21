@@ -29,17 +29,23 @@ type Analytic interface {
 	Analyze(templates []model.Template, kubeAPIVersions model.KubernetesAPIVersion) ([]model.AnalyticsResult, error)
 }
 
+type HTTPClient interface {
+	Get(url string) (*http.Response, error)
+}
+
 type service struct {
 	helmClient Helm
 	repository Repository
 	analyzer   Analytic
+	httpClient HTTPClient
 }
 
-func NewService(helmClient Helm, repository Repository, analyzer Analytic) service {
+func NewService(helmClient Helm, repository Repository, analyzer Analytic, httpClient HTTPClient) service {
 	return service{
 		helmClient: helmClient,
 		repository: repository,
 		analyzer:   analyzer,
+		httpClient: httpClient,
 	}
 }
 
@@ -66,7 +72,6 @@ func (s service) GetCharts(repoName string) ([]model.Chart, error) {
 	}
 
 	if len(cachedCharts) != 0 {
-		log.Printf("%s chart detail fetched from cache\n", repoName)
 		return cachedCharts, nil
 	}
 
@@ -75,8 +80,7 @@ func (s service) GetCharts(repoName string) ([]model.Chart, error) {
 		return nil, err
 	}
 
-	log.Printf("out going call: %s\n", url)
-	response, err := http.Get(url + "/index.yaml")
+	response, err := s.httpClient.Get(url + "/index.yaml")
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +110,10 @@ func (s service) GetCharts(repoName string) ([]model.Chart, error) {
 	}
 
 	chartsByte, _ := json.Marshal(charts)
-	s.repository.Set(repoName, string(chartsByte))
+	err = s.repository.Set(repoName, string(chartsByte))
+	if err != nil {
+		return nil, err
+	}
 
 	return charts, nil
 }
