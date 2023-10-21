@@ -21,7 +21,7 @@ type Repository interface {
 
 type Helm interface {
 	GetValues(chartUrl, chartName, chartVersion string) (map[string]interface{}, error)
-	GetManifest(chartUrl, chartName, chartVersion string) ([]model.Template, error)
+	GetTemplates(chartUrl, chartName, chartVersion string) ([]model.Template, error)
 	RenderManifest(chartUrl, chartName, chartVersion string, files []string) (error, []model.Manifest)
 }
 
@@ -192,7 +192,7 @@ func (s service) GetTemplates(repoName, chartName, chartVersion string) ([]model
 		}
 	}
 
-	templates, err := s.helmClient.GetManifest(url, chartName, chartVersion)
+	templates, err := s.helmClient.GetTemplates(url, chartName, chartVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -202,8 +202,11 @@ func (s service) GetTemplates(repoName, chartName, chartVersion string) ([]model
 	}
 
 	err = s.repository.Set(cacheKey, string(templatesByte))
+	if err != nil {
+		return nil, err
+	}
 
-	return templates, err
+	return templates, nil
 }
 
 func (s service) RenderManifest(repoName, chartName, chartVersion string, values []string) (model.ManifestResponse, error) {

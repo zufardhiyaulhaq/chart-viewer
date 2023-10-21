@@ -14,7 +14,7 @@ type Helm struct {
 }
 
 // GetManifest provides a mock function with given fields: chartUrl, chartName, chartVersion
-func (_m *Helm) GetManifest(chartUrl string, chartName string, chartVersion string) ([]model.Template, error) {
+func (_m *Helm) GetTemplates(chartUrl string, chartName string, chartVersion string) ([]model.Template, error) {
 	ret := _m.Called(chartUrl, chartName, chartVersion)
 
 	var r0 []model.Template

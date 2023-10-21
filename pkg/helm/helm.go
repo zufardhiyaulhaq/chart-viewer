@@ -67,7 +67,7 @@ func (h helm) GetValues(chartUrl, chartName, chartVersion string) (map[string]in
 	return chartRequested.Values, nil
 }
 
-func (h helm) GetManifest(chartUrl, chartName, chartVersion string) ([]model.Template, error) {
+func (h helm) GetTemplates(chartUrl, chartName, chartVersion string) ([]model.Template, error) {
 	h.client.ChartPathOptions.Version = chartVersion
 	h.client.ReleaseName = chartName
 	h.client.RepoURL = chartUrl
