@@ -13,7 +13,7 @@ type Helm struct {
 	mock.Mock
 }
 
-// GetManifest provides a mock function with given fields: chartUrl, chartName, chartVersion
+// GetTemplates provides a mock function with given fields: chartUrl, chartName, chartVersion
 func (_m *Helm) GetTemplates(chartUrl string, chartName string, chartVersion string) ([]model.Template, error) {
 	ret := _m.Called(chartUrl, chartName, chartVersion)
 
@@ -65,27 +65,27 @@ func (_m *Helm) GetValues(chartUrl string, chartName string, chartVersion string
 	return r0, r1
 }
 
-// RenderManifest provides a mock function with given fields: chartUrl, chartName, chartVersion, files
-func (_m *Helm) RenderManifest(chartUrl string, chartName string, chartVersion string, files []string) (error, []model.Manifest) {
-	ret := _m.Called(chartUrl, chartName, chartVersion, files)
+// RenderManifest provides a mock function with given fields: chartUrl, chartName, chartVersion, valuesFileLocation
+func (_m *Helm) RenderManifest(chartUrl string, chartName string, chartVersion string, valuesFileLocation string) ([]model.Manifest, error) {
+	ret := _m.Called(chartUrl, chartName, chartVersion, valuesFileLocation)
 
-	var r0 error
-	var r1 []model.Manifest
-	if rf, ok := ret.Get(0).(func(string, string, string, []string) (error, []model.Manifest)); ok {
-		return rf(chartUrl, chartName, chartVersion, files)
+	var r0 []model.Manifest
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string, string, string, string) ([]model.Manifest, error)); ok {
+		return rf(chartUrl, chartName, chartVersion, valuesFileLocation)
 	}
-	if rf, ok := ret.Get(0).(func(string, string, string, []string) error); ok {
-		r0 = rf(chartUrl, chartName, chartVersion, files)
+	if rf, ok := ret.Get(0).(func(string, string, string, string) []model.Manifest); ok {
+		r0 = rf(chartUrl, chartName, chartVersion, valuesFileLocation)
 	} else {
-		r0 = ret.Error(0)
-	}
-
-	if rf, ok := ret.Get(1).(func(string, string, string, []string) []model.Manifest); ok {
-		r1 = rf(chartUrl, chartName, chartVersion, files)
-	} else {
-		if ret.Get(1) != nil {
-			r1 = ret.Get(1).([]model.Manifest)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]model.Manifest)
 		}
+	}
+
+	if rf, ok := ret.Get(1).(func(string, string, string, string) error); ok {
+		r1 = rf(chartUrl, chartName, chartVersion, valuesFileLocation)
+	} else {
+		r1 = ret.Error(1)
 	}
 
 	return r0, r1

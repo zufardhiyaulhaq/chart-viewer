@@ -192,21 +192,21 @@ func (_m *Service) GetValues(repoName string, chartName string, chartVersion str
 }
 
 // RenderManifest provides a mock function with given fields: repoName, chartName, chartVersion, values
-func (_m *Service) RenderManifest(repoName string, chartName string, chartVersion string, values []string) (model.ManifestResponse, error) {
+func (_m *Service) RenderManifest(repoName string, chartName string, chartVersion string, values string) (model.ManifestResponse, error) {
 	ret := _m.Called(repoName, chartName, chartVersion, values)
 
 	var r0 model.ManifestResponse
 	var r1 error
-	if rf, ok := ret.Get(0).(func(string, string, string, []string) (model.ManifestResponse, error)); ok {
+	if rf, ok := ret.Get(0).(func(string, string, string, string) (model.ManifestResponse, error)); ok {
 		return rf(repoName, chartName, chartVersion, values)
 	}
-	if rf, ok := ret.Get(0).(func(string, string, string, []string) model.ManifestResponse); ok {
+	if rf, ok := ret.Get(0).(func(string, string, string, string) model.ManifestResponse); ok {
 		r0 = rf(repoName, chartName, chartVersion, values)
 	} else {
 		r0 = ret.Get(0).(model.ManifestResponse)
 	}
 
-	if rf, ok := ret.Get(1).(func(string, string, string, []string) error); ok {
+	if rf, ok := ret.Get(1).(func(string, string, string, string) error); ok {
 		r1 = rf(repoName, chartName, chartVersion, values)
 	} else {
 		r1 = ret.Error(1)

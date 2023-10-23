@@ -2,14 +2,13 @@ package service_test
 
 import (
 	"bytes"
-	"crypto/md5"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"testing"
+	"time"
 
 	"chart-viewer/mocks"
 	"chart-viewer/pkg/model"
@@ -649,6 +648,121 @@ func Test_service_GetTemplates(t *testing.T) {
 	}
 }
 
+func Test_service_RenderManifest(t *testing.T) {
+	type fields struct {
+		helm       *mocks.Helm
+		repository *mocks.Repository
+		analyzer   *mocks.Analytic
+		httpClient *mocks.HTTPClient
+	}
+	type args struct {
+		repoName     string
+		chartName    string
+		chartVersion string
+		values       string
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    model.ManifestResponse
+		wantErr error
+		mockFn  func(ff fields, aa args)
+	}{
+		{
+			name: "should success to return manifest exist in cache",
+			fields: fields{
+				helm:       new(mocks.Helm),
+				repository: new(mocks.Repository),
+			},
+			args: args{
+				repoName:     "stable",
+				chartName:    "aap-deploy",
+				chartVersion: "v0.0.1",
+				values:       `{"ingress": false}`,
+			},
+			want: model.ManifestResponse{
+				URL: "/api/v1/charts/manifests/stable/app-deploy/v0.0.1/5b5b333fa5174d95f7c2cf0a3dca1575",
+				Manifests: []model.Manifest{
+					{
+						Name:    "deployment.yaml",
+						Content: "kind: Deployment",
+					},
+				},
+			},
+			wantErr: nil,
+			mockFn: func(ff fields, aa args) {
+				cacheKey := fmt.Sprintf("manifests-%s-%s-%s-%s", aa.repoName, aa.chartName, aa.chartVersion, "5b5b333fa5174d95f7c2cf0a3dca1575")
+				stringifiedManifest := `{"url":"/api/v1/charts/manifests/stable/app-deploy/v0.0.1/5b5b333fa5174d95f7c2cf0a3dca1575","manifests":[{"name":"deployment.yaml","content":"kind: Deployment"}]}`
+				ff.repository.On("Get", cacheKey).Return(stringifiedManifest, nil)
+			},
+		},
+		{
+			name: "should success to render manifest",
+			fields: fields{
+				helm:       new(mocks.Helm),
+				repository: new(mocks.Repository),
+			},
+			args: args{
+				repoName:     "stable",
+				chartName:    "app-deploy",
+				chartVersion: "v0.0.1",
+				values:       `{"ingress": false}`,
+			},
+			want: model.ManifestResponse{
+				URL: "/api/v1/charts/manifests/stable/app-deploy/v0.0.1/5b5b333fa5174d95f7c2cf0a3dca1575",
+				Manifests: []model.Manifest{
+					{
+						Name:    "deployment.yaml",
+						Content: "kind: Deployment",
+					},
+				},
+			},
+			wantErr: nil,
+			mockFn: func(ff fields, aa args) {
+				cacheKey := fmt.Sprintf("manifests-%s-%s-%s-%s", aa.repoName, aa.chartName, aa.chartVersion, "5b5b333fa5174d95f7c2cf0a3dca1575")
+				stringifiedManifest := ""
+				ff.repository.On("Get", cacheKey).Return(stringifiedManifest, nil)
+
+				stringifiedRepos := `[{"name":"stable","url":"https://chart.stable.com"}]`
+				ff.repository.On("Get", "repos").Return(stringifiedRepos, nil)
+
+				manifests := []model.Manifest{
+					{
+						Name:    "deployment.yaml",
+						Content: "kind: Deployment",
+					},
+				}
+
+				valuesFileLocation := fmt.Sprintf("/tmp/chart-viewer/%s-values.yaml", time.Now().Format("20060102150405"))
+				ff.helm.On("RenderManifest", "https://chart.stable.com", aa.chartName, aa.chartVersion, valuesFileLocation).Return(manifests, nil)
+
+				manifestReponse := model.ManifestResponse{
+					URL: "/api/v1/charts/manifests/stable/app-deploy/v0.0.1/5b5b333fa5174d95f7c2cf0a3dca1575",
+					Manifests: []model.Manifest{
+						{
+							Name:    "deployment.yaml",
+							Content: "kind: Deployment",
+						},
+					},
+				}
+				manifestResponseByte, _ := json.Marshal(manifestReponse)
+				ff.repository.On("Set", cacheKey, string(manifestResponseByte)).Return(nil)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.mockFn(tt.fields, tt.args)
+
+			svc := service.NewService(tt.fields.helm, tt.fields.repository, tt.fields.analyzer, tt.fields.httpClient)
+			actual, err := svc.RenderManifest(tt.args.repoName, tt.args.chartName, tt.args.chartVersion, tt.args.values)
+			assert.Equal(t, tt.wantErr, err)
+			assert.Equal(t, tt.want, actual)
+		})
+	}
+}
+
 func TestService_GetStringifiedManifestsFromCache(t *testing.T) {
 	stringifiedManifest := "{\"url\":\"rest://chart-viewer.com\",\"manifests\":[{\"name\":\"deployment.yaml\",\"content\":\"kind: Deployment\"}]}"
 
@@ -664,92 +778,4 @@ func TestService_GetStringifiedManifestsFromCache(t *testing.T) {
 	expectedManifests := "---\nkind: Deployment\n"
 
 	assert.Equal(t, expectedManifests, manifest)
-}
-
-func TestService_RenderManifest(t *testing.T) {
-	createValuesTestFile()
-	hash := getValuesHash()
-
-	repos := "[{\"name\":\"stable\",\"url\":\"https://charts.helm.sh/stable\"}]"
-	rawManifest := "{\"url\":\"/api/v1/charts/manifests/stable/app-deploy/v0.0.1/e554acfce37f759ada1b70240cee4bcf\",\"manifests\":[{\"name\":\"deployment.yaml\",\"content\":\"kind: Deployment\"}]}"
-	manifest := []model.Manifest{
-		{
-			Name:    "deployment.yaml",
-			Content: "kind: Deployment",
-		},
-	}
-
-	repository := new(mocks.Repository)
-	analyzer := new(mocks.Analytic)
-	helm := new(mocks.Helm)
-	httpClient := new(mocks.HTTPClient)
-
-	repository.On("Get", "manifests-stable-app-deploy-v0.0.1-"+hash).Return(rawManifest, nil)
-	repository.On("Get", "repos").Return(repos, nil)
-	repository.On("Set", "manifests-stable-app-deploy-v0.0.1-"+hash, rawManifest).Return(nil)
-	helm.On("RenderManifest", "https://charts.helm.sh/stable", "app-deploy", "v0.0.1", []string{"/tmp/values.yaml"}).Return(manifest, nil)
-
-	svc := service.NewService(helm, repository, analyzer, httpClient)
-	actualManifest, err := svc.RenderManifest("stable", "app-deploy", "v0.0.1", []string{"/tmp/values.yaml"})
-	assert.NoError(t, err)
-
-	expectedManifests := model.ManifestResponse{
-		URL: "/api/v1/charts/manifests/stable/app-deploy/v0.0.1/" + hash,
-		Manifests: []model.Manifest{
-			{
-				Name:    "deployment.yaml",
-				Content: "kind: Deployment",
-			},
-		},
-	}
-
-	assert.Equal(t, expectedManifests, actualManifest)
-}
-
-func TestService_RenderManifest_Cached(t *testing.T) {
-	createValuesTestFile()
-	hash := getValuesHash()
-
-	stringifiedManifest := "{\"url\":\"/api/v1/charts/manifests/stable/app-deploy/v0.0.1/" + hash + "\",\"manifests\":[{\"name\":\"deployment.yaml\",\"content\":\"kind: Deployment\"}]}"
-	manifest := []model.Manifest{
-		{
-			Name:    "deployment.yaml",
-			Content: "kind: Deployment",
-		},
-	}
-
-	repository := new(mocks.Repository)
-	analyzer := new(mocks.Analytic)
-	helm := new(mocks.Helm)
-	httpClient := new(mocks.HTTPClient)
-	repository.On("Get", "manifests-stable-app-deploy-v0.0.1-"+hash).Return(stringifiedManifest, nil)
-	helm.On("RenderManifest", "https://charts.helm.sh/stable", "app-deploy", "v0.0.1", []string{"/tmp/values.yaml"}).Return(manifest, nil)
-
-	svc := service.NewService(helm, repository, analyzer, httpClient)
-	actualManifest, err := svc.RenderManifest("stable", "app-deploy", "v0.0.1", []string{"/tmp/values.yaml"})
-	assert.NoError(t, err)
-
-	expectedManifests := model.ManifestResponse{
-		URL: "/api/v1/charts/manifests/stable/app-deploy/v0.0.1/" + hash,
-		Manifests: []model.Manifest{
-			{
-				Name:    "deployment.yaml",
-				Content: "kind: Deployment",
-			},
-		},
-	}
-
-	assert.Equal(t, expectedManifests, actualManifest)
-}
-
-func getValuesHash() string {
-	valuesFileContent, _ := os.ReadFile("/tmp/values.yaml")
-	hash := md5.Sum(valuesFileContent)
-	return fmt.Sprintf("%x", hash)
-}
-
-func createValuesTestFile() {
-	valueBytes := []byte("affinity: {}")
-	fileLocation := "/tmp/values.yaml"
-	_ = os.WriteFile(fileLocation, valueBytes, 0644)
 }

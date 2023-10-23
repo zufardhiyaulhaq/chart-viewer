@@ -95,30 +95,30 @@ func (h helm) GetTemplates(chartUrl, chartName, chartVersion string) ([]model.Te
 	return templateStrings, nil
 }
 
-func (h helm) RenderManifest(chartUrl, chartName, chartVersion string, files []string) (error, []model.Manifest) {
+func (h helm) RenderManifest(chartUrl, chartName, chartVersion string, valuesFileLocation string) ([]model.Manifest, error) {
 	h.client.ChartPathOptions.Version = chartVersion
 	h.client.ReleaseName = chartName
 	h.client.RepoURL = chartUrl
 	cp, err := h.client.ChartPathOptions.LocateChart(chartName, settings)
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 
 	chartRequested, err := loader.Load(cp)
 
 	valueOption := &values.Options{
-		ValueFiles: files,
+		ValueFiles: []string{valuesFileLocation},
 	}
 
 	p := getter.All(settings)
 	vals, err := valueOption.MergeValues(p)
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 
 	rel, err := h.client.Run(chartRequested, vals)
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 
 	var manifests bytes.Buffer
@@ -162,5 +162,5 @@ func (h helm) RenderManifest(chartUrl, chartName, chartVersion string, files []s
 		})
 	}
 
-	return nil, finalManifests
+	return finalManifests, err
 }

@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"time"
 
 	"chart-viewer/pkg/model"
 	"github.com/gorilla/mux"
@@ -17,7 +15,7 @@ type Service interface {
 	GetCharts(repoName string) ([]model.Chart, error)
 	GetValues(repoName, chartName, chartVersion string) (map[string]interface{}, error)
 	GetTemplates(repoName, chartName, chartVersion string) ([]model.Template, error)
-	RenderManifest(repoName, chartName, chartVersion string, values []string) (model.ManifestResponse, error)
+	RenderManifest(repoName, chartName, chartVersion string, values string) (model.ManifestResponse, error)
 	GetStringifiedManifests(repoName, chartName, chartVersion, hash string) (string, error)
 	GetChart(repoName string, chartName string, chartVersion string) (model.ChartDetail, error)
 	AnalyzeTemplate(templates []model.Template, kubeVersion string) ([]model.AnalyticsResult, error)
@@ -149,17 +147,7 @@ func (h *handler) RenderManifests(w http.ResponseWriter, r *http.Request) {
 	chartName := vars["chart-name"]
 	chartVersion := vars["chart-version"]
 
-	valueBytes := []byte(values)
-	fileLocation := fmt.Sprintf("/tmp/%s-values.yaml", time.Now().Format("20060102150405"))
-	err = os.WriteFile(fileLocation, valueBytes, 0644)
-	if err != nil {
-		errMessage := fmt.Sprintf("cannot store values to file: %s", err.Error())
-		respondWithError(w, http.StatusInternalServerError, errMessage)
-		return
-	}
-
-	valueFile := []string{fileLocation}
-	manifests, err := h.service.RenderManifest(repoName, chartName, chartVersion, valueFile)
+	manifests, err := h.service.RenderManifest(repoName, chartName, chartVersion, values)
 	if err != nil {
 		errMessage := fmt.Sprintf("cannot render manifest: %s", err.Error())
 		respondWithError(w, http.StatusInternalServerError, errMessage)

@@ -9,6 +9,8 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"time"
 
 	"chart-viewer/pkg/model"
 	"gopkg.in/yaml.v3"
@@ -22,7 +24,7 @@ type Repository interface {
 type Helm interface {
 	GetValues(chartUrl, chartName, chartVersion string) (map[string]interface{}, error)
 	GetTemplates(chartUrl, chartName, chartVersion string) ([]model.Template, error)
-	RenderManifest(chartUrl, chartName, chartVersion string, files []string) (error, []model.Manifest)
+	RenderManifest(chartUrl, chartName, chartVersion string, valuesFileLocation string) ([]model.Manifest, error)
 }
 
 type Analytic interface {
@@ -209,8 +211,15 @@ func (s service) GetTemplates(repoName, chartName, chartVersion string) ([]model
 	return templates, nil
 }
 
-func (s service) RenderManifest(repoName, chartName, chartVersion string, values []string) (model.ManifestResponse, error) {
-	hash := hashFileContent(values[0])
+func (s service) RenderManifest(repoName, chartName, chartVersion string, values string) (model.ManifestResponse, error) {
+	valueBytes := []byte(values)
+	valuesFileLocation := fmt.Sprintf("/tmp/chart-viewer/%s-values.yaml", time.Now().Format("20060102150405"))
+	err := os.WriteFile(valuesFileLocation, valueBytes, 0644)
+	if err != nil {
+		return model.ManifestResponse{}, err
+	}
+
+	hash := hashFileContent(valuesFileLocation)
 	cacheKey := fmt.Sprintf("manifests-%s-%s-%s-%s", repoName, chartName, chartVersion, hash)
 	stringifiedManifest, err := s.repository.Get(cacheKey)
 	if err != nil {
@@ -218,15 +227,16 @@ func (s service) RenderManifest(repoName, chartName, chartVersion string, values
 		return model.ManifestResponse{}, err
 	}
 
-	var cachedManifests model.ManifestResponse
-	err = json.Unmarshal([]byte(stringifiedManifest), &cachedManifests)
-	if err != nil {
-		log.Printf("failed to unmarshal stringified manifest: %s\n", err)
-		return model.ManifestResponse{}, err
-	}
-
 	if stringifiedManifest != "" {
 		log.Printf("manifest fetched from cache with key: %s\n", cacheKey)
+
+		var cachedManifests model.ManifestResponse
+		err = json.Unmarshal([]byte(stringifiedManifest), &cachedManifests)
+		if err != nil {
+			log.Printf("failed to unmarshal stringified manifest: %s\n", err)
+			return model.ManifestResponse{}, err
+		}
+
 		return cachedManifests, err
 	}
 
@@ -238,7 +248,7 @@ func (s service) RenderManifest(repoName, chartName, chartVersion string, values
 		}
 	}
 
-	err, manifests := s.helmClient.RenderManifest(url, chartName, chartVersion, values)
+	manifests, err := s.helmClient.RenderManifest(url, chartName, chartVersion, valuesFileLocation)
 	if err != nil {
 		log.Printf("failed to render manifest: %s\n", err)
 		return model.ManifestResponse{}, err

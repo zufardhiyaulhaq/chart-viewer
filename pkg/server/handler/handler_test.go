@@ -2,13 +2,12 @@ package handler_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"chart-viewer/mocks"
 	"chart-viewer/pkg/model"
@@ -462,7 +461,7 @@ func Test_handler_RenderManifests(t *testing.T) {
 		args           args
 		expectedResult string
 		expectedCode   int
-		mockFn         func(ff fields)
+		mockFn         func(ff fields, aa args)
 	}{
 		{
 			name:   "should return 200 when success to render manifests",
@@ -478,7 +477,7 @@ func Test_handler_RenderManifests(t *testing.T) {
 			`,
 			args:         args{requestBody: `{"values": "affinity:{}"}`},
 			expectedCode: http.StatusOK,
-			mockFn: func(ff fields) {
+			mockFn: func(ff fields, aa args) {
 				manifests := model.ManifestResponse{
 					URL: "/charts/manifests/repo-name/chart-name/chart-version/hash",
 					Manifests: []model.Manifest{
@@ -486,8 +485,10 @@ func Test_handler_RenderManifests(t *testing.T) {
 						{Name: "service.yaml", Content: "kind: Service"},
 					},
 				}
-				fileLocation := fmt.Sprintf("/tmp/%s-values.yaml", time.Now().Format("20060102150405"))
-				ff.service.On("RenderManifest", "repo-name", "chart-name", "chart-version", []string{fileLocation}).Return(manifests, nil)
+				req := model.RenderRequest{}
+				_ = json.Unmarshal([]byte(aa.requestBody), &req)
+
+				ff.service.On("RenderManifest", "repo-name", "chart-name", "chart-version", req.Values).Return(manifests, nil)
 			},
 		},
 		{
@@ -496,7 +497,7 @@ func Test_handler_RenderManifests(t *testing.T) {
 			expectedResult: `{"error": "cannot decode request body: invalid character 'm' looking for beginning of value"}`,
 			args:           args{requestBody: `malformed request body`},
 			expectedCode:   http.StatusBadRequest,
-			mockFn:         func(ff fields) {},
+			mockFn:         func(ff fields, aa args) {},
 		},
 		{
 			name:           "should return 500 when error to decode request body",
@@ -504,16 +505,18 @@ func Test_handler_RenderManifests(t *testing.T) {
 			expectedResult: `{"error": "cannot render manifest: error"}`,
 			args:           args{requestBody: `{"values": "affinity:{}"}`},
 			expectedCode:   http.StatusInternalServerError,
-			mockFn: func(ff fields) {
-				fileLocation := fmt.Sprintf("/tmp/%s-values.yaml", time.Now().Format("20060102150405"))
-				ff.service.On("RenderManifest", "repo-name", "chart-name", "chart-version", []string{fileLocation}).Return(model.ManifestResponse{}, errors.New("error"))
+			mockFn: func(ff fields, aa args) {
+				req := model.RenderRequest{}
+				_ = json.Unmarshal([]byte(aa.requestBody), &req)
+
+				ff.service.On("RenderManifest", "repo-name", "chart-name", "chart-version", req.Values).Return(model.ManifestResponse{}, errors.New("error"))
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.mockFn(tt.fields)
+			tt.mockFn(tt.fields, tt.args)
 
 			request := []byte(tt.args.requestBody)
 			req, err := http.NewRequest("POST", "/charts/templates/render/repo-name/chart-name/chart-version", bytes.NewBuffer(request))

@@ -19,7 +19,7 @@ type Service interface {
 	GetCharts(repoName string) ([]model.Chart, error)
 	GetValues(repoName, chartName, chartVersion string) (map[string]interface{}, error)
 	GetTemplates(repoName, chartName, chartVersion string) ([]model.Template, error)
-	RenderManifest(repoName, chartName, chartVersion string, values []string) (model.ManifestResponse, error)
+	RenderManifest(repoName, chartName, chartVersion string, valuesFileLocation string) (model.ManifestResponse, error)
 	GetStringifiedManifests(repoName, chartName, chartVersion, hash string) (string, error)
 	GetChart(repoName string, chartName string, chartVersion string) (model.ChartDetail, error)
 	AnalyzeTemplate(templates []model.Template, kubeVersion string) ([]model.AnalyticsResult, error)
