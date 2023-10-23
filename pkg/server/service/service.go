@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -317,7 +316,7 @@ func (s service) AnalyzeTemplate(templates []model.Template, kubeVersion string)
 }
 
 func hashFileContent(fileLocation string) string {
-	valuesFileContent, _ := ioutil.ReadFile(fileLocation)
+	valuesFileContent, _ := os.ReadFile(fileLocation)
 	hash := md5.Sum(valuesFileContent)
 	return fmt.Sprintf("%x", hash)
 }

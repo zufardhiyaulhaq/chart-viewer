@@ -763,19 +763,75 @@ func Test_service_RenderManifest(t *testing.T) {
 	}
 }
 
-func TestService_GetStringifiedManifestsFromCache(t *testing.T) {
-	stringifiedManifest := "{\"url\":\"rest://chart-viewer.com\",\"manifests\":[{\"name\":\"deployment.yaml\",\"content\":\"kind: Deployment\"}]}"
+func Test_service_GetStringifiedManifests(t *testing.T) {
+	type fields struct {
+		helm       *mocks.Helm
+		repository *mocks.Repository
+		analyzer   *mocks.Analytic
+		httpClient *mocks.HTTPClient
+	}
+	type args struct {
+		repoName     string
+		chartName    string
+		chartVersion string
+		hash         string
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    string
+		wantErr error
+		mockFn  func(ff fields, aa args)
+	}{
+		{
+			name: "should success to return manifest from cache",
+			fields: fields{
+				repository: new(mocks.Repository),
+			},
+			args: args{
+				repoName:     "stable",
+				chartName:    "app-deploy",
+				chartVersion: "v0.0.1",
+				hash:         "hash",
+			},
+			want:    "---\nkind: Deployment\n",
+			wantErr: nil,
+			mockFn: func(ff fields, aa args) {
+				cacheKey := fmt.Sprintf("manifests-%s-%s-%s-%s", aa.repoName, aa.chartName, aa.chartVersion, aa.hash)
 
-	repository := new(mocks.Repository)
-	analyzer := new(mocks.Analytic)
-	helm := new(mocks.Helm)
-	httpClient := new(mocks.HTTPClient)
-	repository.On("Get", "manifests-stable-app-deploy-v0.0.1-hash").Return(stringifiedManifest, nil)
-	svc := service.NewService(helm, repository, analyzer, httpClient)
-	manifest, err := svc.GetStringifiedManifests("stable", "app-deploy", "v0.0.1", "hash")
-	assert.NoError(t, err)
+				stringifiedManifest := `{"url":"rest://chart-viewer.com","manifests":[{"name":"deployment.yaml","content":"kind: Deployment"}]}`
+				ff.repository.On("Get", cacheKey).Return(stringifiedManifest, nil)
+			},
+		},
+		{
+			name: "should failed if repository return error when getting cache",
+			fields: fields{
+				repository: new(mocks.Repository),
+			},
+			args: args{
+				repoName:     "stable",
+				chartName:    "app-deploy",
+				chartVersion: "v0.0.1",
+				hash:         "hash",
+			},
+			want:    "",
+			wantErr: errors.New("error"),
+			mockFn: func(ff fields, aa args) {
+				cacheKey := fmt.Sprintf("manifests-%s-%s-%s-%s", aa.repoName, aa.chartName, aa.chartVersion, aa.hash)
 
-	expectedManifests := "---\nkind: Deployment\n"
+				ff.repository.On("Get", cacheKey).Return("", errors.New("error"))
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.mockFn(tt.fields, tt.args)
 
-	assert.Equal(t, expectedManifests, manifest)
+			svc := service.NewService(tt.fields.helm, tt.fields.repository, tt.fields.analyzer, tt.fields.httpClient)
+			actual, err := svc.GetStringifiedManifests(tt.args.repoName, tt.args.chartName, tt.args.chartVersion, tt.args.hash)
+			assert.Equal(t, tt.wantErr, err)
+			assert.Equal(t, tt.want, actual)
+		})
+	}
 }
