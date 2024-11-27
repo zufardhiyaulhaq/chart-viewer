@@ -2,83 +2,108 @@ package service
 
 import (
 	"bytes"
-	"chart-viewer/pkg/helm"
-	"chart-viewer/pkg/model"
-	"chart-viewer/pkg/repository"
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"io"
+	"os"
+	"time"
 
+	"chart-viewer/pkg/model"
 	"gopkg.in/yaml.v3"
 )
 
-type Service interface {
-	GetRepos() []model.Repo
-	GetCharts(repoName string) (error, []model.Chart)
-	GetValues(repoName, chartName, chartVersion string) (error, map[string]interface{})
-	GetTemplates(repoName, chartName, chartVersion string) []model.Template
-	RenderManifest(repoName, chartName, chartVersion string, values []string) (error, model.ManifestResponse)
-	GetStringifiedManifests(repoName, chartName, chartVersion, hash string) string
-	GetChart(repoName string, chartName string, chartVersion string) (error, model.ChartDetail)
+type Repository interface {
+	Set(string, string) error
+	Get(string) (string, error)
+}
+
+type Helm interface {
+	GetValues(chartUrl, chartName, chartVersion string) (map[string]interface{}, error)
+	GetTemplates(chartUrl, chartName, chartVersion string) ([]model.Template, error)
+	RenderManifest(chartUrl, chartName, chartVersion string, valuesFileLocation string) ([]model.Manifest, error)
+}
+
+type Analytic interface {
+	Analyze(templates []model.Template, kubeAPIVersions model.KubernetesAPIVersion) ([]model.AnalyticsResult, error)
+}
+
+type HTTPClient interface {
+	Get(url string) (*http.Response, error)
 }
 
 type service struct {
-	helmClient helm.Helm
-	repository repository.Repository
+	helmClient Helm
+	repository Repository
+	analyzer   Analytic
+	httpClient HTTPClient
 }
 
-func NewService(helmClient helm.Helm, repository repository.Repository) Service {
-	return &service{
+func NewService(helmClient Helm, repository Repository, analyzer Analytic, httpClient HTTPClient) service {
+	return service{
 		helmClient: helmClient,
 		repository: repository,
+		analyzer:   analyzer,
+		httpClient: httpClient,
 	}
 }
 
-func (s *service) GetRepos() []model.Repo {
-	stringifiedRepos := s.repository.Get("repos")
+func (s service) GetRepos() ([]model.Repo, error) {
+	stringifiedRepos, err := s.repository.Get("repos")
+	if err != nil {
+		return nil, err
+	}
 	var repos []model.Repo
-	_ = json.Unmarshal([]byte(stringifiedRepos), &repos)
-
-	return repos
+	err = json.Unmarshal([]byte(stringifiedRepos), &repos)
+	return repos, err
 }
 
-func (s *service) GetCharts(repoName string) (error, []model.Chart) {
-	stringifiedCharts := s.repository.Get(repoName)
+func (s service) GetCharts(repoName string) ([]model.Chart, error) {
+	stringifiedCharts, err := s.repository.Get(repoName)
+	if err != nil {
+		return nil, err
+	}
+
 	var cachedCharts []model.Chart
-	_ = json.Unmarshal([]byte(stringifiedCharts), &cachedCharts)
+	err = json.Unmarshal([]byte(stringifiedCharts), &cachedCharts)
+	if err != nil {
+		return nil, err
+	}
 
 	if len(cachedCharts) != 0 {
-		log.Printf("%s chart detail fetched from cache\n", repoName)
-		return nil, cachedCharts
+		return cachedCharts, nil
 	}
 
-	url := s.getUrl(repoName)
-
-	log.Printf("out going call: %s\n", url)
-	response, err := http.Get(url + "/index.yaml")
+	url, err := s.getUrl(repoName)
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 
-	content, err := ioutil.ReadAll(response.Body)
+	response, err := s.httpClient.Get(url + "/index.yaml")
+	if err != nil {
+		return nil, err
+	}
+
+	content, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, err
+	}
 
 	repoDetail := new(model.RepoDetailResponse)
 	err = yaml.Unmarshal(content, &repoDetail)
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 
 	var chartNames []string
-
 	for name, _ := range repoDetail.Entries {
 		chartNames = append(chartNames, name)
 	}
 
 	var charts []model.Chart
-
 	for _, name := range chartNames {
 		charts = append(charts, model.Chart{
 			Name:     name,
@@ -87,23 +112,37 @@ func (s *service) GetCharts(repoName string) (error, []model.Chart) {
 	}
 
 	chartsByte, _ := json.Marshal(charts)
-	s.repository.Set(repoName, string(chartsByte))
+	err = s.repository.Set(repoName, string(chartsByte))
+	if err != nil {
+		return nil, err
+	}
 
-	return nil, charts
+	return charts, nil
 }
 
-func (s *service) GetValues(repoName, chartName, chartVersion string) (error, map[string]interface{}) {
+func (s service) GetValues(repoName, chartName, chartVersion string) (map[string]interface{}, error) {
 	cacheKey := fmt.Sprintf("value-%s-%s-%s", repoName, chartName, chartVersion)
-	stringifiedValues := s.repository.Get(cacheKey)
+	stringifiedValues, err := s.repository.Get(cacheKey)
+	if err != nil {
+		return nil, err
+	}
+
 	var cachedValues map[string]interface{}
-	_ = json.Unmarshal([]byte(stringifiedValues), &cachedValues)
+	err = json.Unmarshal([]byte(stringifiedValues), &cachedValues)
+	if err != nil {
+		return nil, err
+	}
+
 	if len(cachedValues) != 0 {
 		log.Printf("value-%s-%s-%s chart values fetched from cache\n", repoName, chartName, chartVersion)
-		return nil, cachedValues
+		return cachedValues, nil
 	}
 
 	var url string
-	repos := s.GetRepos()
+	repos, err := s.GetRepos()
+	if err != nil {
+		return nil, err
+	}
 
 	for _, r := range repos {
 		if r.Name == repoName {
@@ -111,28 +150,43 @@ func (s *service) GetValues(repoName, chartName, chartVersion string) (error, ma
 		}
 	}
 
-	err, values := s.helmClient.GetValues(url, chartName, chartVersion)
+	values, err := s.helmClient.GetValues(url, chartName, chartVersion)
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
-	valuesByte, _ := json.Marshal(values)
-	s.repository.Set(cacheKey, string(valuesByte))
 
-	return nil, values
+	valuesByte, err := json.Marshal(values)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.repository.Set(cacheKey, string(valuesByte))
+	if err != nil {
+		return nil, err
+	}
+
+	return values, nil
 }
 
-func (s *service) GetTemplates(repoName, chartName, chartVersion string) []model.Template {
+func (s service) GetTemplates(repoName, chartName, chartVersion string) ([]model.Template, error) {
 	cacheKey := fmt.Sprintf("template-%s-%s-%s", repoName, chartName, chartVersion)
-	stringifiedTemplates := s.repository.Get(cacheKey)
+	stringifiedTemplates, err := s.repository.Get(cacheKey)
+	if err != nil {
+		return nil, err
+	}
+
 	var cachedTemplates []model.Template
 	_ = json.Unmarshal([]byte(stringifiedTemplates), &cachedTemplates)
 	if len(cachedTemplates) != 0 {
 		log.Printf("template-%s-%s-%s chart values fetched from cache\n", repoName, chartName, chartVersion)
-		return cachedTemplates
+		return cachedTemplates, nil
 	}
 
 	var url string
-	repos := s.GetRepos()
+	repos, err := s.GetRepos()
+	if err != nil {
+		return nil, err
+	}
 
 	for _, r := range repos {
 		if r.Name == repoName {
@@ -140,37 +194,64 @@ func (s *service) GetTemplates(repoName, chartName, chartVersion string) []model
 		}
 	}
 
-	templates := s.helmClient.GetManifest(url, chartName, chartVersion)
-	templatesByte, _ := json.Marshal(templates)
-	s.repository.Set(cacheKey, string(templatesByte))
+	templates, err := s.helmClient.GetTemplates(url, chartName, chartVersion)
+	if err != nil {
+		return nil, err
+	}
+	templatesByte, err := json.Marshal(templates)
+	if err != nil {
+		return nil, err
+	}
 
-	return templates
+	err = s.repository.Set(cacheKey, string(templatesByte))
+	if err != nil {
+		return nil, err
+	}
+
+	return templates, nil
 }
 
-func (s *service) RenderManifest(repoName, chartName, chartVersion string, values []string) (error, model.ManifestResponse) {
-	hash := hashFileContent(values[0])
+func (s service) RenderManifest(repoName, chartName, chartVersion string, values string) (model.ManifestResponse, error) {
+	valueBytes := []byte(values)
+	valuesFileLocation := fmt.Sprintf("/tmp/chart-viewer/%s-values.yaml", time.Now().Format("20060102150405"))
+	err := os.WriteFile(valuesFileLocation, valueBytes, 0644)
+	if err != nil {
+		return model.ManifestResponse{}, err
+	}
+
+	hash := hashFileContent(valuesFileLocation)
 	cacheKey := fmt.Sprintf("manifests-%s-%s-%s-%s", repoName, chartName, chartVersion, hash)
-	stringifiedManifest := s.repository.Get(cacheKey)
-	var cachedManifests model.ManifestResponse
-	_ = json.Unmarshal([]byte(stringifiedManifest), &cachedManifests)
+	stringifiedManifest, err := s.repository.Get(cacheKey)
+	if err != nil {
+		log.Printf("failed to get stringified manifest from cache: %s\n", err)
+		return model.ManifestResponse{}, err
+	}
 
 	if stringifiedManifest != "" {
 		log.Printf("manifest fetched from cache with key: %s\n", cacheKey)
-		return nil, cachedManifests
+
+		var cachedManifests model.ManifestResponse
+		err = json.Unmarshal([]byte(stringifiedManifest), &cachedManifests)
+		if err != nil {
+			log.Printf("failed to unmarshal stringified manifest: %s\n", err)
+			return model.ManifestResponse{}, err
+		}
+
+		return cachedManifests, err
 	}
 
 	var url string
-	repos := s.GetRepos()
-
+	repos, err := s.GetRepos()
 	for _, r := range repos {
 		if r.Name == repoName {
 			url = r.URL
 		}
 	}
 
-	err, manifests := s.helmClient.RenderManifest(url, chartName, chartVersion, values)
+	manifests, err := s.helmClient.RenderManifest(url, chartName, chartVersion, valuesFileLocation)
 	if err != nil {
-		return err, model.ManifestResponse{}
+		log.Printf("failed to render manifest: %s\n", err)
+		return model.ManifestResponse{}, err
 	}
 
 	generatedUrl := fmt.Sprintf("/api/v1/charts/manifests/%s/%s/%s/%s", repoName, chartName, chartVersion, hash)
@@ -179,36 +260,64 @@ func (s *service) RenderManifest(repoName, chartName, chartVersion string, value
 		Manifests: manifests,
 	}
 
-	manifestsByte, _ := json.Marshal(manifestsResponse)
-	s.repository.Set(cacheKey, string(manifestsByte))
+	manifestsByte, err := json.Marshal(manifestsResponse)
+	if err != nil {
+		log.Printf("failed to marshal manifest: %s\n", err)
+		return model.ManifestResponse{}, err
+	}
 
-	return nil, manifestsResponse
+	err = s.repository.Set(cacheKey, string(manifestsByte))
+	return manifestsResponse, err
 }
 
-func (s *service) GetStringifiedManifests(repoName, chartName, chartVersion, hash string) string {
+func (s service) GetStringifiedManifests(repoName, chartName, chartVersion, hash string) (string, error) {
 	cacheKey := fmt.Sprintf("manifests-%s-%s-%s-%s", repoName, chartName, chartVersion, hash)
 	var cachedManifests model.ManifestResponse
-	stringifiedManifest := s.repository.Get(cacheKey)
+	stringifiedManifest, err := s.repository.Get(cacheKey)
+	if err != nil {
+		return "", err
+	}
 
-	_ = json.Unmarshal([]byte(stringifiedManifest), &cachedManifests)
-	return stringfyManifest(cachedManifests.Manifests)
+	err = json.Unmarshal([]byte(stringifiedManifest), &cachedManifests)
+	return stringfyManifest(cachedManifests.Manifests), err
 }
 
-func (s *service) GetChart(repoName string, chartName string, chartVersion string) (error, model.ChartDetail) {
-	err, values := s.GetValues(repoName, chartName, chartVersion)
+func (s service) GetChart(repoName string, chartName string, chartVersion string) (model.ChartDetail, error) {
+	values, err := s.GetValues(repoName, chartName, chartVersion)
 	if err != nil {
-		return err, model.ChartDetail{}
+		return model.ChartDetail{}, err
 	}
-	templates := s.GetTemplates(repoName, chartName, chartVersion)
 
-	return nil, model.ChartDetail{
+	templates, err := s.GetTemplates(repoName, chartName, chartVersion)
+	return model.ChartDetail{
 		Values:    values,
 		Templates: templates,
+	}, err
+}
+
+func (s service) AnalyzeTemplate(templates []model.Template, kubeVersion string) ([]model.AnalyticsResult, error) {
+	stringifiedApiVersion, err := s.repository.Get("api-versions")
+	if err != nil {
+		return nil, err
 	}
+	var kubeAPIVersions []model.KubernetesAPIVersion
+	err = json.Unmarshal([]byte(stringifiedApiVersion), &kubeAPIVersions)
+	if err != nil {
+		return nil, err
+	}
+
+	var kubeAPIVersion model.KubernetesAPIVersion
+	for _, k := range kubeAPIVersions {
+		if k.KubeVersion == kubeVersion {
+			kubeAPIVersion = k
+		}
+	}
+
+	return s.analyzer.Analyze(templates, kubeAPIVersion)
 }
 
 func hashFileContent(fileLocation string) string {
-	valuesFileContent, _ := ioutil.ReadFile(fileLocation)
+	valuesFileContent, _ := os.ReadFile(fileLocation)
 	hash := md5.Sum(valuesFileContent)
 	return fmt.Sprintf("%x", hash)
 }
@@ -235,13 +344,17 @@ func stringfyManifest(manifests []model.Manifest) string {
 	return buffer.String()
 }
 
-func (s *service) getUrl(repoName string) string {
-	repos := s.GetRepos()
+func (s service) getUrl(repoName string) (string, error) {
+	repos, err := s.GetRepos()
+	if err != nil {
+		return "", err
+	}
+
 	for _, r := range repos {
 		if r.Name == repoName {
 			return r.GetURL()
 		}
 	}
 
-	return ""
+	return "", err
 }

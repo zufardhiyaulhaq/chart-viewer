@@ -1,14 +1,17 @@
 package chartviewer
 
 import (
-	"chart-viewer/pkg/helm"
-	"chart-viewer/pkg/repository"
-	"chart-viewer/pkg/server/handler"
-	"chart-viewer/pkg/server/service"
 	"fmt"
 	"log"
 	"net/http"
 
+	"chart-viewer/pkg/analyzer"
+	"chart-viewer/pkg/helm"
+	"chart-viewer/pkg/repository"
+	"chart-viewer/pkg/rest"
+	"chart-viewer/pkg/server/handler"
+	"chart-viewer/pkg/server/service"
+	"github.com/go-redis/redis"
 	"github.com/gorilla/mux"
 	"github.com/spf13/cobra"
 )
@@ -23,29 +26,36 @@ func NewServeCommand() *cobra.Command {
 
 	command := cobra.Command{
 		Use:     "serve",
-		Short:   "Start the http server",
+		Short:   "Start the rest server",
 		Example: "chart-viewer serve --host 127.0.0.1 --port 9999 --redis-host 127.0.0.1 --redis-port 6379",
-		Run: func(cmd *cobra.Command, args []string) {
-			host := defaultHost
-			port := defaultPort
+		RunE: func(cmd *cobra.Command, args []string) error {
+			appHost := defaultHost
+			appPort := defaultPort
 			redisHost := defaultRedisHost
 			redisPort := defaultRedisPort
 
 			redisAddress := fmt.Sprintf("%s:%s", redisHost, redisPort)
-			address := fmt.Sprintf("%s:%s", host, port)
+			address := fmt.Sprintf("%s:%s", appHost, appPort)
 
-			err, repo := repository.NewRepository(redisAddress)
+			redisClient := redis.NewClient(&redis.Options{Addr: redisAddress})
+			status := redisClient.Ping()
+			err := status.Err()
 			if err != nil {
-				fmt.Printf("cannot connect to redis: %s\n", err)
-				return
+				log.Printf("cannot connect to redis: %s\n", err)
+				return err
 			}
 
+			repo := repository.NewRepository(redisClient)
 			helmClient := helm.NewHelmClient(repo)
-			svc := service.NewService(helmClient, repo)
+			analyser := analyzer.New()
+			restClient := rest.New()
+			svc := service.NewService(helmClient, repo, analyser, restClient)
 			r := createRouter(svc)
 
 			log.Printf("server run on http://%s\n", address)
 			log.Fatal(http.ListenAndServe(address, r))
+
+			return nil
 		},
 	}
 
@@ -57,7 +67,7 @@ func NewServeCommand() *cobra.Command {
 	return &command
 }
 
-func createRouter(svc service.Service) *mux.Router {
+func createRouter(svc Service) *mux.Router {
 	r := mux.NewRouter()
 
 	appHandler := handler.NewHandler(svc)
@@ -65,13 +75,13 @@ func createRouter(svc service.Service) *mux.Router {
 	r.Use(appHandler.CORS)
 	apiV1 := r.PathPrefix("/api/v1/").Subrouter()
 	apiV1.Use(appHandler.LoggerMiddleware)
-	apiV1.HandleFunc("/repos", appHandler.GetReposHandler).Methods("GET")
-	apiV1.HandleFunc("/charts/{repo-name}", appHandler.GetChartsHandler).Methods("GET")
-	apiV1.HandleFunc("/charts/{repo-name}/{chart-name}/{chart-version}", appHandler.GetChartHandler).Methods("GET")
-	apiV1.HandleFunc("/charts/values/{repo-name}/{chart-name}/{chart-version}", appHandler.GetValuesHandler).Methods("GET")
-	apiV1.HandleFunc("/charts/templates/{repo-name}/{chart-name}/{chart-version}", appHandler.GetTemplatesHandler).Methods("GET")
-	apiV1.HandleFunc("/charts/manifests/render/{repo-name}/{chart-name}/{chart-version}", appHandler.RenderManifestsHandler).Methods("POST", "OPTIONS")
-	apiV1.HandleFunc("/charts/manifests/{repo-name}/{chart-name}/{chart-version}/{hash}", appHandler.GetManifestsHandler).Methods("GET")
+	apiV1.HandleFunc("/repos", appHandler.GetRepos).Methods("GET")
+	apiV1.HandleFunc("/charts/{repo-name}", appHandler.GetCharts).Methods("GET")
+	apiV1.HandleFunc("/charts/{repo-name}/{chart-name}/{chart-version}", appHandler.GetChart).Methods("GET")
+	apiV1.HandleFunc("/charts/values/{repo-name}/{chart-name}/{chart-version}", appHandler.GetValues).Methods("GET")
+	apiV1.HandleFunc("/charts/templates/{repo-name}/{chart-name}/{chart-version}", appHandler.GetTemplates).Methods("GET")
+	apiV1.HandleFunc("/charts/manifests/render/{repo-name}/{chart-name}/{chart-version}", appHandler.RenderManifests).Methods("POST", "OPTIONS")
+	apiV1.HandleFunc("/charts/manifests/{repo-name}/{chart-name}/{chart-version}/{hash}", appHandler.GetManifests).Methods("GET")
 
 	fileServer := http.FileServer(http.Dir("ui/dist"))
 	r.PathPrefix("/js").Handler(http.StripPrefix("/", fileServer))

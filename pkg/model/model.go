@@ -58,3 +58,26 @@ type ManifestResponse struct {
 	URL       string     `json:"url"`
 	Manifests []Manifest `json:"manifests"`
 }
+
+type KubernetesAPIVersion struct {
+	KubeVersion string   `json:"kube_version"`
+	APIVersions []string `json:"api_versions"`
+}
+
+type KubeResourceCommonSpec struct {
+	APIVersion string `yaml:"apiVersion"`
+}
+
+type AnalyticsResult struct {
+	Template
+	Compatible bool `json:"compatible"`
+}
+
+type AnalyticResponse struct {
+	Values    map[string]interface{} `json:"values"`
+	Templates []AnalyticsResult      `json:"templates"`
+}
+
+type RenderRequest struct {
+	Values string `json:"values"`
+}

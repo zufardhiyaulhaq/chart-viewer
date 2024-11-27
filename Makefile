@@ -8,16 +8,20 @@ build-frontend:
 	cd ui; make build
 
 test:
+	go clean -testcache
 	go test -cover ./...
 
 run:build-backend build-frontend
-	./bin/app serve --host 0.0.0.0 --redis-host 127.0.0.1
+	./bin/chart-viewer serve --host 0.0.0.0 --redis-host 127.0.0.1
+
+run-backend:build-backend
+	./bin/chart-viewer serve --host 0.0.0.0 --redis-host 127.0.0.1
 
 seed:build-backend
-	./bin/app seed --seed-file seed.json
+	./bin/chart-viewer seed --repo-seed seed.json --kube-version-seed api_versions.json
 
 help:build-backend
-	./bin/app --help
+	./bin/chart-viewer --help
 
 package:
 	docker build . -t ecojuntak/${APP_NAME}:${APP_VERSION} -t ecojuntak/${APP_NAME}:latest
@@ -25,3 +29,6 @@ package:
 publish-image:
 	docker push ecojuntak/${APP_NAME}:${APP_VERSION} 
 	docker push ecojuntak/${APP_NAME}:latest
+
+generate-mock:
+	 mockery --all --case snake

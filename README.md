@@ -1,5 +1,11 @@
 # Chart Viewer
 
+NOT DEVELOPED ANYMORE
+
+You can use [artifacthub.io](https://artifacthub.io) as alternative.
+
+---
+
 You can try the demo [here](https://chartviewer.app)
 
 A simple web app to help you inspect helm chart. So far, you can use this tool for:
